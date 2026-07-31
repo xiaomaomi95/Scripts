@@ -1,0 +1,446 @@
+-- 光影渲染控制面板GUI
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local SoundService = game:GetService("SoundService")
+local Lighting = game:GetService("Lighting")
+local RunService = game:GetService("RunService")
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- 音效资源ID
+local START_SOUND_ID = "1837769261"      -- 面板启动音效
+local BUTTON_SOUND_ID = "115916891254154"  -- 按钮点击音效
+
+-- 播放音效函数，播放完成自动销毁音效实例
+local function playSound(soundId)
+    local sound = Instance.new("Sound")
+    sound.SoundId = "rbxassetid://" .. soundId
+    sound.Parent = SoundService
+    sound:Play()
+    
+    sound.Ended:Connect(function()
+        sound:Destroy()
+    end)
+end
+
+-- 播放启动音效
+playSound(START_SOUND_ID)
+
+-- 保存原始光照参数，用于一键重置
+local originalLighting = {
+    ClockTime = Lighting.ClockTime,
+    Brightness = Lighting.Brightness,
+    Ambient = Lighting.Ambient,
+    OutdoorAmbient = Lighting.OutdoorAmbient,
+    ColorShift_Top = Lighting.ColorShift_Top,
+    ColorShift_Bottom = Lighting.ColorShift_Bottom,
+    FogColor = Lighting.FogColor,
+    FogStart = Lighting.FogStart,
+    FogEnd = Lighting.FogEnd,
+    GlobalShadows = Lighting.GlobalShadows,
+    ShadowSoftness = Lighting.ShadowSoftness,
+    Technology = Lighting.Technology,
+    EnvironmentDiffuseScale = Lighting.EnvironmentDiffuseScale,
+    EnvironmentSpecularScale = Lighting.EnvironmentSpecularScale
+}
+
+-- 创建顶层屏幕GUI
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "AK_SHADER_GUI"
+screenGui.ResetOnSpawn = false
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.Parent = playerGui
+
+-- 主窗口容器
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 180, 0, 210) 
+mainFrame.Position = UDim2.new(0, 10, 0, 10)
+mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+mainFrame.BorderSizePixel = 0
+mainFrame.BackgroundTransparency = 0.05
+mainFrame.Parent = screenGui
+
+-- 圆角组件
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 10)
+corner.Parent = mainFrame
+
+-- 边框描边
+local border = Instance.new("UIStroke")
+border.Color = Color3.fromRGB(80, 80, 120)
+border.Thickness = 2
+border.Parent = mainFrame
+
+-- 顶部标题栏
+local title = Instance.new("TextLabel")
+title.Name = "Title"
+title.Size = UDim2.new(1, 0, 0, 25)
+title.Position = UDim2.new(0, 0, 0, 0)
+title.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
+title.TextColor3 = Color3.fromRGB(220, 220, 255)
+title.Text = "光影渲染（MADE IN 小猫猫）"
+title.Font = Enum.Font.GothamBold
+title.TextSize = 14
+title.Parent = mainFrame
+
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0, 10)
+titleCorner.Parent = title
+
+-- 底部控制按钮容器（隐藏/固定）
+local controlContainer = Instance.new("Frame")
+controlContainer.Name = "ControlContainer"
+controlContainer.Size = UDim2.new(1, -20, 0, 20)
+controlContainer.Position = UDim2.new(0, 10, 1, -25)
+controlContainer.BackgroundTransparency = 1
+controlContainer.Parent = mainFrame
+
+-- 双按钮网格布局
+local controlLayout = Instance.new("UIGridLayout")
+controlLayout.CellSize = UDim2.new(0.5, -4, 1, 0)
+controlLayout.CellPadding = UDim.new(0, 8, 0, 0)
+controlLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+controlLayout.Parent = controlContainer
+
+-- 隐藏面板按钮
+local toggleButton = Instance.new("TextButton")
+toggleButton.Name = "ToggleButton"
+toggleButton.Size = UDim2.new(1, 0, 1, 0)
+toggleButton.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
+toggleButton.TextColor3 = Color3.fromRGB(200, 200, 255)
+toggleButton.Text = "隐藏"
+toggleButton.Font = Enum.Font.Gotham
+toggleButton.TextSize = 10
+toggleButton.Parent = controlContainer
+
+local toggleCorner = Instance.new("UICorner")
+toggleCorner.CornerRadius = UDim.new(0, 6)
+toggleCorner.Parent = toggleButton
+
+-- 固定窗口按钮
+local pinButton = Instance.new("TextButton")
+pinButton.Name = "PinButton"
+pinButton.Size = UDim2.new(1, 0, 1, 0)
+pinButton.BackgroundColor3 = Color3.fromRGB(160, 100, 220)
+pinButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+pinButton.Text = "锁定窗口"
+pinButton.Font = Enum.Font.Gotham
+pinButton.TextSize = 10
+pinButton.Parent = controlContainer
+
+local pinCorner = Instance.new("UICorner")
+pinCorner.CornerRadius = UDim.new(0, 6)
+pinCorner.Parent = pinButton
+
+-- 光影预设按钮容器
+local buttonContainer = Instance.new("Frame")
+buttonContainer.Name = "ButtonContainer"
+buttonContainer.Size = UDim2.new(1, -20, 1, -60)
+buttonContainer.Position = UDim2.new(0, 10, 0, 30)
+buttonContainer.BackgroundTransparency = 1
+buttonContainer.Visible = true
+buttonContainer.Parent = mainFrame
+
+-- 垂直列表布局
+local layout = Instance.new("UIListLayout")
+layout.Padding = UDim.new(0, 6)
+layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+layout.VerticalAlignment = Enum.VerticalAlignment.Top
+layout.Parent = buttonContainer
+
+-- 按钮生成工具函数
+function createButton(text, color)
+    local button = Instance.new("TextButton")
+    button.Name = text .. "Button"
+    button.Size = UDim2.new(1, 0, 0, 28)
+    button.BackgroundColor3 = color
+    button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    button.Text = text
+    button.Font = Enum.Font.Gotham
+    button.TextSize = 12
+    button.AutoButtonColor = true
+    
+    local buttonCorner = Instance.new("UICorner")
+    buttonCorner.CornerRadius = UDim.new(0, 6)
+    buttonCorner.Parent = button
+    
+    return button
+end
+
+-- 夜晚光影预设按钮
+local nightButton = createButton("🌙 深夜模式", Color3.fromRGB(0, 120, 255))
+nightButton.Parent = buttonContainer
+
+-- 黄昏日落预设按钮
+local sunsetButton = createButton("🌅 黄昏日落", Color3.fromRGB(255, 100, 150))
+sunsetButton.Parent = buttonContainer
+
+-- 夜视高亮预设按钮
+local nightVisionButton = createButton("👁 夜视模式", Color3.fromRGB(0, 180, 60))
+nightVisionButton.Parent = buttonContainer
+
+-- 黑白单色滤镜按钮
+local monochromeButton = createButton("⬛ 黑白滤镜", Color3.fromRGB(128, 128, 128))
+monochromeButton.Parent = buttonContainer
+
+-- 重置光照按钮
+local resetButton = createButton("🔄 重置光照", Color3.fromRGB(220, 60, 60))
+resetButton.Parent = buttonContainer
+
+-- 底部状态提示文字
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Name = "StatusLabel"
+statusLabel.Size = UDim2.new(1, -10, 0, 15)
+statusLabel.Position = UDim2.new(0, 5, 1, -50)
+statusLabel.BackgroundTransparency = 1
+statusLabel.TextColor3 = Color3.fromRGB(180, 180, 220)
+statusLabel.Text = "就绪 - 窗口未锁定"
+statusLabel.Font = Enum.Font.Gotham
+statusLabel.TextSize = 10
+statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+statusLabel.Parent = mainFrame
+
+-- 窗口锁定状态变量
+local isGUIPinned = false
+
+-- 切换窗口锁定状态函数
+local function toggleGUIPin()
+    isGUIPinned = not isGUIPinned
+    
+    if isGUIPinned then
+        pinButton.Text = "解锁窗口"
+        pinButton.BackgroundColor3 = Color3.fromRGB(120, 80, 180)
+        statusLabel.Text = "窗口已锁定"
+        statusLabel.TextColor3 = Color3.fromRGB(180, 140, 255)
+    else
+        pinButton.Text = "锁定窗口"
+        pinButton.BackgroundColor3 = Color3.fromRGB(160, 100, 220)
+        statusLabel.Text = "窗口未锁定"
+        statusLabel.TextColor3 = Color3.fromRGB(180, 180, 220)
+    end
+    
+    return true, isGUIPinned and "✅ 窗口已锁定" or "✅ 窗口已解锁"
+end
+
+-- 深夜光影渲染
+local function applyNightShader()
+    Lighting.ClockTime = 0  
+    Lighting.Brightness = 0.1
+    Lighting.Ambient = Color3.fromRGB(30, 30, 60)
+    Lighting.OutdoorAmbient = Color3.fromRGB(30, 30, 60)
+    Lighting.ColorShift_Top = Color3.fromRGB(0, 0, 50)
+    Lighting.ColorShift_Bottom = Color3.fromRGB(0, 0, 30)
+    Lighting.FogColor = Color3.fromRGB(10, 10, 40)
+    Lighting.FogStart = 100
+    Lighting.FogEnd = 500
+    Lighting.GlobalShadows = true
+    Lighting.ShadowSoftness = 0.5
+    statusLabel.Text = "✅ 深夜光影已启用"
+    statusLabel.TextColor3 = Color3.fromRGB(100, 150, 255)
+end
+
+-- 黄昏日落光影渲染
+local function applySunsetShader()
+    Lighting.ClockTime = 18.5  
+    Lighting.Brightness = 0.25  
+    Lighting.Ambient = Color3.fromRGB(255, 120, 160)  
+    Lighting.OutdoorAmbient = Color3.fromRGB(255, 140, 180) 
+    Lighting.ColorShift_Top = Color3.fromRGB(255, 80, 120)    
+    Lighting.ColorShift_Bottom = Color3.fromRGB(255, 180, 100) 
+    Lighting.FogColor = Color3.fromRGB(255, 150, 100)  
+    Lighting.FogStart = 30  
+    Lighting.FogEnd = 250   
+    Lighting.GlobalShadows = true
+    Lighting.ShadowSoftness = 0.7  
+    statusLabel.Text = "✅ 黄昏日落光影已启用"
+    statusLabel.TextColor3 = Color3.fromRGB(255, 120, 180)  
+end
+
+-- 夜视高亮渲染
+local function applyNightVision()
+    Lighting.Brightness = 5  
+    Lighting.Ambient = Color3.fromRGB(0, 255, 0)  
+    Lighting.OutdoorAmbient = Color3.fromRGB(0, 200, 0)
+    Lighting.ColorShift_Top = Color3.fromRGB(0, 100, 0)
+    Lighting.ColorShift_Bottom = Color3.fromRGB(0, 150, 0)
+    Lighting.FogColor = Color3.fromRGB(0, 50, 0)
+    Lighting.FogStart = 500
+    Lighting.FogEnd = 1000
+    Lighting.GlobalShadows = false  
+    statusLabel.Text = "✅ 夜视模式已启用"
+    statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+end
+
+-- 黑白滤镜状态与特效实例缓存
+local monochromeEffectActive = false
+local originalColorCorrection = nil
+local currentColorCorrection = nil
+
+-- 单色黑白滤镜渲染
+local function applyMonochromeShader()
+    if currentColorCorrection then
+        currentColorCorrection:Destroy()
+    end
+    
+    currentColorCorrection = Instance.new("ColorCorrectionEffect")
+    currentColorCorrection.Name = "MonochromeEffect"
+    currentColorCorrection.Parent = Lighting
+    
+    currentColorCorrection.Brightness = 0.05  
+    currentColorCorrection.Contrast = 0.1     
+    currentColorCorrection.Saturation = -1    
+    currentColorCorrection.TintColor = Color3.fromRGB(255, 255, 255)  
+    
+    -- 灰度环境光
+    Lighting.Ambient = Color3.fromRGB(128, 128, 128)  
+    Lighting.OutdoorAmbient = Color3.fromRGB(150, 150, 150)
+    Lighting.ColorShift_Top = Color3.fromRGB(128, 128, 128)
+    Lighting.ColorShift_Bottom = Color3.fromRGB(128, 128, 128)
+    
+    -- 基础亮度与雾效
+    Lighting.Brightness = 0.8
+    Lighting.FogColor = Color3.fromRGB(100, 100, 100)      
+    monochromeEffectActive = true
+    statusLabel.Text = "✅ 黑白滤镜已启用"
+    statusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)  
+end
+
+-- 还原全部原始光照设置
+local function resetLighting()
+    for property, value in pairs(originalLighting) do
+        Lighting[property] = value
+    end
+    
+    if currentColorCorrection then
+        currentColorCorrection:Destroy()
+        currentColorCorrection = nil
+    end
+    
+    monochromeEffectActive = false
+    statusLabel.Text = "光照已恢复默认"
+    statusLabel.TextColor3 = Color3.fromRGB(180, 180, 220)
+end
+
+-- 按钮点击绑定
+nightButton.MouseButton1Click:Connect(function()
+    playSound(BUTTON_SOUND_ID)
+    if monochromeEffectActive then
+        resetLighting()
+    end
+    applyNightShader()
+end)
+
+sunsetButton.MouseButton1Click:Connect(function()
+    playSound(BUTTON_SOUND_ID)
+    if monochromeEffectActive then
+        resetLighting()
+    end
+    applySunsetShader()
+end)
+
+nightVisionButton.MouseButton1Click:Connect(function()
+    playSound(BUTTON_SOUND_ID)
+    if monochromeEffectActive then
+        resetLighting()
+    end
+    applyNightVision()
+end)
+
+monochromeButton.MouseButton1Click:Connect(function()
+    playSound(BUTTON_SOUND_ID)
+    applyMonochromeShader()
+end)
+
+resetButton.MouseButton1Click:Connect(function()
+    playSound(BUTTON_SOUND_ID)
+    resetLighting()
+end)
+
+pinButton.MouseButton1Click:Connect(function()
+    playSound(BUTTON_SOUND_ID)
+    local success, message = toggleGUIPin()
+    statusLabel.Text = message
+    statusLabel.TextColor3 = Color3.fromRGB(180, 140, 255)
+end)
+
+toggleButton.MouseButton1Click:Connect(function()
+    playSound(BUTTON_SOUND_ID)
+    if buttonContainer.Visible then
+        buttonContainer.Visible = false
+        mainFrame.Size = UDim2.new(0, 180, 0, 50)
+        toggleButton.Text = "展开"
+        statusLabel.Text = "面板已隐藏"
+    else
+        buttonContainer.Visible = true
+        mainFrame.Size = UDim2.new(0, 180, 0, 210)  
+        toggleButton.Text = "隐藏"
+        statusLabel.Text = isGUIPinned and "窗口已锁定" or "窗口未锁定"
+    end
+end)
+
+-- 窗口拖拽逻辑
+local dragging = false
+local dragStart, startPos
+
+-- 拖拽开始
+local function handleDragStart(input)
+    if not isGUIPinned then
+        dragging = true
+        dragStart = input.Position
+        startPos = mainFrame.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end
+
+-- 拖拽移动
+local function handleDrag(input)
+    if dragging and not isGUIPinned then
+        local delta = input.Position - dragStart
+        mainFrame.Position = UDim2.new(
+            startPos.X.Scale, 
+            startPos.X.Offset + delta.X, 
+            startPos.Y.Scale, 
+            startPos.Y.Offset + delta.Y
+        )
+    end
+end
+
+-- 鼠标拖拽绑定
+title.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        handleDragStart(input)
+    end
+end)
+title.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        handleDrag(input)
+    end
+end)
+
+-- 触屏拖拽绑定（移动端支持）
+title.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch then
+        handleDragStart(input)
+    end
+end)
+title.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch then
+        handleDrag(input)
+    end
+end)
+
+-- 玩家退出时自动还原光照
+game:GetService("Players").PlayerRemoving:Connect(function(leavingPlayer)
+    if leavingPlayer == player then
+        resetLighting()
+    end
+end)
+
+-- 初始状态文字
+statusLabel.Text = "就绪"
