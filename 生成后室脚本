@@ -1,0 +1,232 @@
+--地图完全随机生成，非无限廷伸地图
+--By 小猫猫
+local Players = game:GetService("Players")
+local StarterGui = game:GetService("StarterGui")
+
+local userId = Players:GetUserIdFromNameAsync("w76543ee")
+local thumbType = Enum.ThumbnailType.HeadShot
+local thumbSize = Enum.ThumbnailSize.Size420x420
+local content, isReady = Players:GetUserThumbnailAsync(userId, thumbType, thumbSize)
+
+StarterGui:SetCore("SendNotification", {
+    Title = "作者小猫猫",
+    Text = "QQ3096830871",
+    Icon = content,
+    Duration = 10
+})
+
+StarterGui:SetCore("SendNotification", {
+    Title = "后室生成中",
+    Text = "正在加载！",
+    Icon = content,
+    Duration = 10
+})
+
+StarterGui:SetCore("SendNotification", {
+    Title = "生成后无法删除",
+    Text = "请知晓！",
+    Icon = content,
+    Duration = 10
+})
+
+task.wait(10)
+
+StarterGui:SetCore("SendNotification", {
+    Title = "已加载",
+    Text = "探索！",
+    Icon = content,
+    Duration = 5
+})
+
+local WALL_ID = "rbxassetid://10001842770"
+local FLOOR_ID = "rbxassetid://14761085845"
+local ROOF_ID = "rbxassetid://10184072749"
+local AMBIENT_SOUND_ID = "rbxassetid://124855271144476"
+
+local GRID_SIZE = 50
+local ROOM_SIZE = 24 
+local WALL_HEIGHT = 14
+
+local MapFolder = Instance.new("Folder", game.Workspace)
+MapFolder.Name = "The_Final_Backrooms"
+
+-- << Atmosphere & Lighting >> --
+local function setupAtmosphere()
+    local lighting = game:GetService("Lighting")
+    
+    pcall(function()
+        lighting.Technology = Enum.Technology.Compatibility
+    end)
+    
+    lighting.Brightness = 0.08 --全局亮度降低
+    lighting.GlobalShadows = true
+    lighting.ClockTime = 0
+    lighting.OutdoorAmbient = Color3.new(0, 0, 0)
+    
+    local bloom = lighting:FindFirstChild("BackroomsBloom") or Instance.new("BloomEffect", lighting)
+    bloom.Name = "BackroomsBloom"
+    bloom.Size, bloom.Threshold, bloom.Intensity = 22, 1.1, 0.4 --光晕大幅减弱
+    
+    local blur = lighting:FindFirstChild("BackroomsBlur") or Instance.new("BlurEffect", lighting)
+    blur.Name = "BackroomsBlur"
+    blur.Size = 0
+    
+    local lastCameraCF = workspace.CurrentCamera.CFrame
+    game:GetService("RunService").RenderStepped:Connect(function()
+        local currentCF = workspace.CurrentCamera.CFrame
+        local angle = math.acos(math.clamp(currentCF.LookVector:Dot(lastCameraCF.LookVector), -1, 1))
+        blur.Size = math.clamp(angle * 110, 0, 8)
+        lastCameraCF = currentCF
+    end)
+end
+
+-- << Ambient Audio >> --
+local function playAmbientSound()
+    local sound = Instance.new("Sound")
+    sound.Name = "BackroomsAmbience"
+    sound.SoundId = AMBIENT_SOUND_ID
+    sound.Volume = 0.6
+    sound.Looped = true
+    sound.Parent = MapFolder
+    sound:Play()
+end
+
+-- << Asset Loading >> --
+local function getAsset(id)
+    local success, objects = pcall(function() return game:GetObjects(id) end)
+    if success and #objects > 0 then return objects[1] end
+    return nil
+end
+
+local WallT = getAsset(WALL_ID)
+local FloorT = getAsset(FLOOR_ID)
+local RoofT = getAsset(ROOF_ID)
+
+local function universalFit(obj, targetX, targetZ)
+    if not obj then return end
+    if obj:IsA("Model") then
+        local size = obj:GetExtentsSize()
+        local factorX = targetX / math.max(size.X, 0.01)
+        local factorZ = targetZ / math.max(size.Z, 0.01)
+        for _, part in pairs(obj:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.Size = Vector3.new(part.Size.X * factorX, part.Size.Y, part.Size.Z * factorZ)
+                local rel = obj:GetPivot():PointToObjectSpace(part.Position)
+                part.Position = obj:GetPivot():PointToWorldSpace(Vector3.new(rel.X * factorX, rel.Y, rel.Z * factorZ))
+            end
+        end
+    elseif obj:IsA("BasePart") then
+        obj.Size = Vector3.new(targetX, obj.Size.Y, targetZ)
+    end
+end
+
+local function addBaseboard(wallCFrame)
+    local bb = Instance.new("Part", MapFolder)
+    bb.Size = Vector3.new(ROOM_SIZE, 0.8, 0.2)
+    bb.Color = Color3.fromRGB(35, 25, 15)
+    bb.Material = Enum.Material.WoodPlanks
+    bb.Anchored = true
+    bb.CFrame = wallCFrame * CFrame.new(0, -(WALL_HEIGHT/2) + 0.4, 0.21)
+end
+
+local function spawnWall(pos, rotation, addBB)
+    if not WallT then return end
+    local w = WallT:Clone()
+    w.Parent = MapFolder
+    universalFit(w, ROOM_SIZE, 1)
+    local cf = CFrame.new(pos) * CFrame.Angles(0, math.rad(rotation), 0)
+    w:PivotTo(cf)
+    if addBB then addBaseboard(cf) end
+end
+
+-- << Main Execution >> --
+local function generate()
+    local Player = game:GetService("Players").LocalPlayer
+    setupAtmosphere()
+    playAmbientSound()
+    
+    Player.CameraMode = Enum.CameraMode.LockFirstPerson
+
+    if Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") then
+        Player.Character.HumanoidRootPart.CFrame = CFrame.new(Vector3.new(ROOM_SIZE, 5, ROOM_SIZE))
+    end
+
+    -- << Smooth Camera Bobbing >> --
+    task.spawn(function()
+        local Camera = workspace.CurrentCamera
+        local UserInputService = game:GetService("UserInputService")
+        local RunService = game:GetService("RunService")
+        local char = Player.Character or Player.CharacterAdded:Wait()
+        local hum = char:WaitForChild("Humanoid")
+        
+        local bobbingTime = 0
+        UserInputService.MouseIconEnabled = false
+
+        RunService.RenderStepped:Connect(function(dt)
+            if hum.Health <= 0 then return end
+            
+            local root = hum.RootPart
+            local vel = root and Vector3.new(root.Velocity.X, 0, root.Velocity.Z).Magnitude or 0
+            
+            if vel > 1 then
+                -- Bobbing speed scales with movement
+                bobbingTime = bobbingTime + (dt * vel * 1.5)
+            else
+                -- Smooth return to center when idle
+                bobbingTime = math.max(0, bobbingTime - dt * 2) 
+            end
+
+            local vertical = math.sin(bobbingTime * 0.8) * 0.12
+            local horizontal = math.cos(bobbingTime * 0.4) * 0.08
+            local tilt = math.cos(bobbingTime * 0.4) * 0.015
+
+            local bobCF = CFrame.new(horizontal, vertical, 0) * CFrame.Angles(0, 0, tilt)
+            Camera.CFrame = Camera.CFrame * bobCF
+        end)
+    end)
+
+    -- Generation Loop
+    for x = 1, GRID_SIZE do
+        for z = 1, GRID_SIZE do
+            local basePos = Vector3.new(x * ROOM_SIZE, 0, z * ROOM_SIZE)
+            
+            if FloorT then
+                local f = FloorT:Clone() f.Parent = MapFolder
+                universalFit(f, ROOM_SIZE, ROOM_SIZE)
+                f:PivotTo(CFrame.new(basePos))
+            end
+
+            if RoofT then
+                local r = RoofT:Clone() r.Parent = MapFolder
+                universalFit(r, ROOM_SIZE, ROOM_SIZE)
+                r:PivotTo(CFrame.new(basePos + Vector3.new(0, WALL_HEIGHT, 0)))
+            end
+
+            -- Neon Lights 灯光亮度降低
+            if math.random() > 0.4 then
+                local l = Instance.new("Part", MapFolder)
+                l.Material, l.Color = Enum.Material.Neon, Color3.fromRGB(255, 250, 210)
+                l.Size, l.Anchored, l.CanCollide = Vector3.new(10, 0.1, 4), true, false
+                l.CFrame = CFrame.new(basePos + Vector3.new(0, WALL_HEIGHT - 0.5, 0))
+                local pl = Instance.new("PointLight", l)
+                pl.Range = 16
+                pl.Brightness = 0.7
+            end
+
+            -- Inner Walls
+            if math.random() > 0.7 then spawnWall(basePos + Vector3.new(ROOM_SIZE/2, WALL_HEIGHT/2, 0), 90, true) end
+            if math.random() > 0.7 then spawnWall(basePos + Vector3.new(0, WALL_HEIGHT/2, ROOM_SIZE/2), 0, true) end
+
+            -- Perimeter Walls
+            if x == 1 then spawnWall(basePos - Vector3.new(ROOM_SIZE/2, -WALL_HEIGHT/2, 0), 90, true) end
+            if x == GRID_SIZE then spawnWall(basePos + Vector3.new(ROOM_SIZE/2, WALL_HEIGHT/2, 0), 90, true) end
+            if z == 1 then spawnWall(basePos - Vector3.new(0, -WALL_HEIGHT/2, ROOM_SIZE/2), 0, true) end
+            if z == GRID_SIZE then spawnWall(basePos + Vector3.new(0, WALL_HEIGHT/2, ROOM_SIZE/2), 0, true) end
+
+            if z % 20 == 0 then task.wait(0.01) end
+        end
+        task.wait()
+    end
+end
+
+generate()
