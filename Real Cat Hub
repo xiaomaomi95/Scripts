@@ -237,7 +237,6 @@ UtilityTab:AddButton({
         end
     end
 })
-
 UtilityTab:AddButton({
     Name = "取消坐下",
     Callback = function()
@@ -266,6 +265,111 @@ UtilityTab:AddButton({
                 OrionLib:MakeNotification({Name="丢弃工具",Content="当前没有手持工具",Time=2})
             end
         end
+    end
+})
+UtilityTab:AddSection({ Name = "踏空行走功能（如果需要频繁开关请移步至脚本库）" })
+UtilityTab:AddToggle({
+    Name = "踏空行走",
+    Default = false,
+    Callback = function(state)
+        if not rawget(_G, "WalkBoardRenderConn") then _G.WalkBoardRenderConn = nil end
+        if not rawget(_G, "WalkBoardInst") then _G.WalkBoardInst = nil end
+        if not rawget(_G, "WalkBoardMeta") then
+            _G.WalkBoardMeta = {
+                boardY = nil,
+                jumpPeakY = nil,
+                isJumping = false
+            }
+        end
+        if rawget(_G,"WalkBoardCharConn") then
+            pcall(function() _G.WalkBoardCharConn:Disconnect() end)
+            _G.WalkBoardCharConn = nil
+        end
+
+        --====关闭逻辑====
+        if not state then
+            if _G.WalkBoardRenderConn then
+                pcall(function() _G.WalkBoardRenderConn:Disconnect() end)
+                _G.WalkBoardRenderConn = nil
+            end
+            if _G.WalkBoardInst then
+                pcall(function() _G.WalkBoardInst:Destroy() end)
+                _G.WalkBoardInst = nil
+            end
+            _G.WalkBoardMeta.boardY = nil
+            _G.WalkBoardMeta.jumpPeakY = nil
+            _G.WalkBoardMeta.isJumping = false
+            OrionLib:MakeNotification({Name="踏空行走",Content="已关闭",Time=2})
+            return
+        end
+
+        --====开启逻辑====
+        local Players = game:GetService("Players")
+        local RunService = game:GetService("RunService")
+        local Player = Players.LocalPlayer
+        local data = _G.WalkBoardMeta
+
+        local oldBoard = workspace:FindFirstChild("WalkBoard")
+        if oldBoard then oldBoard:Destroy() end
+
+        local board = Instance.new("Part")
+        board.Name = "WalkBoard"
+        board.Size = Vector3.new(2,0.2,2) --改为2*2小基板
+        board.Transparency = 1
+        board.CanCollide = true
+        board.CanTouch = false
+        board.Anchored = true
+        board.Massless = true
+        board.Parent = workspace
+        _G.WalkBoardInst = board
+
+        local function setupChar(char)
+            local hum = char:WaitForChild("Humanoid")
+            local root = char:WaitForChild("HumanoidRootPart")
+            data.boardY = root.Position.Y - 3.4
+            data.jumpPeakY = nil
+            data.isJumping = false
+
+            hum.Jumping:Connect(function(jumpState)
+                if jumpState then
+                    data.isJumping = true
+                    data.jumpPeakY = root.Position.Y
+                end
+            end)
+
+            if _G.WalkBoardRenderConn then
+                pcall(function() _G.WalkBoardRenderConn:Disconnect() end)
+                _G.WalkBoardRenderConn = nil
+            end
+
+            local loopConn = RunService.Stepped:Connect(function()
+                if not (root and root:IsDescendantOf(workspace) and _G.WalkBoardInst) then return end
+                local plyY = root.Position.Y
+
+                if data.isJumping then
+                    if plyY > data.jumpPeakY then
+                        data.jumpPeakY = plyY
+                    end
+                    if plyY < data.jumpPeakY - 0.3 then
+                        data.isJumping = false
+                        data.boardY = data.jumpPeakY - 3.4
+                    end
+                end
+                _G.WalkBoardInst.Position = Vector3.new(root.Position.X, data.boardY, root.Position.Z)
+            end)
+            _G.WalkBoardRenderConn = loopConn
+        end
+
+        if Player.Character then
+            task.wait(0.15)
+            setupChar(Player.Character)
+        end
+        _G.WalkBoardCharConn = Player.CharacterAdded:Connect(function(char)
+            task.wait(0.2)
+            setupChar(char)
+        end)
+
+        OrionLib:MakeNotification({Name="踏空行走",Content="踏空行走已开启",Time=2})
     end
 })
 UtilityTab:AddSection({ Name = "锁定视角功能" })
@@ -746,6 +850,259 @@ local ScriptHubTab = Window:MakeTab({
 	PremiumOnly = false
 })
 ScriptHubTab:AddSection({ Name = "自制脚本加载器" })
+ScriptHubTab:AddButton({
+    Name = "踏空行走",
+    Callback = function()
+    local Players = game:GetService("Players")
+local StarterGui = game:GetService("StarterGui")
+
+local userId = Players:GetUserIdFromNameAsync("w76543ee")
+local thumbType = Enum.ThumbnailType.HeadShot
+local thumbSize = Enum.ThumbnailSize.Size420x420
+local content, isReady = Players:GetUserThumbnailAsync(userId, thumbType, thumbSize)
+
+StarterGui:SetCore("SendNotification", {
+    Title = "启动中",
+    Text = "正在加载！",
+    Icon = content,
+    Duration = 5
+})
+
+task.wait(5)
+
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+local board = nil
+local loopConn = nil
+local boardY = nil
+local jumpPeakY = nil
+local isJumping = false
+local enabled = false
+local charAddedConn = nil
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "WalkBoardUI"
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = PlayerGui
+
+-- UI
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 180, 0, 110)
+MainFrame.Position = UDim2.new(0.3,0,0.3,0)
+MainFrame.BackgroundColor3 = Color3.new(0.15,0.15,0.15)
+MainFrame.BorderSizePixel = 2
+MainFrame.BorderColor3 = Color3.new(0.4,0.4,0.4)
+MainFrame.Active = true
+MainFrame.Draggable = false
+MainFrame.Parent = ScreenGui
+
+-- 标题栏
+local TitleBar = Instance.new("Frame")
+TitleBar.Size = UDim2.new(1,0,0,30)
+TitleBar.BackgroundColor3 = Color3.new(0.28,0.28,0.28)
+TitleBar.ZIndex = 10
+TitleBar.Active = true
+TitleBar.Parent = MainFrame
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1,0,1,0)
+Title.BackgroundTransparency = 1
+Title.Text = "踏空行走"
+Title.TextColor3 = Color3.new(1,1,1)
+Title.Font = Enum.Font.SourceSansBold
+Title.TextSize = 17
+Title.TextXAlignment = Enum.TextXAlignment.Center
+Title.Parent = TitleBar
+
+local MinBtn = Instance.new("TextButton")
+MinBtn.Size = UDim2.new(0,28,0,22)
+MinBtn.Position = UDim2.new(1,-60,0,4)
+MinBtn.BackgroundColor3 = Color3.new(0.18,0.45,0.7)
+MinBtn.Text = "−"
+MinBtn.TextColor3 = Color3.new(1,1,1)
+MinBtn.Font = Enum.Font.SourceSansBold
+MinBtn.TextSize =18
+MinBtn.ZIndex =20
+MinBtn.Parent = TitleBar
+
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size = UDim2.new(0,28,0,22)
+CloseBtn.Position = UDim2.new(1,-30,0,4)
+CloseBtn.BackgroundColor3 = Color3.new(0.7,0.2,0.2)
+CloseBtn.Text = "×"
+CloseBtn.TextColor3 = Color3.new(1,1,1)
+CloseBtn.Font = Enum.Font.SourceSansBold
+CloseBtn.TextSize =18
+CloseBtn.ZIndex =20
+CloseBtn.Parent = TitleBar
+
+-- 内容容器
+local Content = Instance.new("Frame")
+Content.Size = UDim2.new(1, 0, 1, -30)
+Content.Position = UDim2.new(0,0,0,30)
+Content.BackgroundTransparency = 1
+Content.Parent = MainFrame
+
+-- ==== 拖拽逻辑 ====
+local dragData = {
+    dragging = false,
+    offX = 0,
+    offY = 0
+}
+
+TitleBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragData.dragging = true
+        local m = UserInputService:GetMouseLocation()
+        dragData.offX = m.X - MainFrame.AbsolutePosition.X
+        dragData.offY = m.Y - MainFrame.AbsolutePosition.Y
+    end
+end)
+
+RunService.RenderStepped:Connect(function()
+    if dragData.dragging then
+        local m = UserInputService:GetMouseLocation()
+        MainFrame.Position = UDim2.new(0, m.X - dragData.offX, 0, m.Y - dragData.offY)
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragData.dragging = false
+    end
+end)
+
+--最小化
+local miniState = false
+local normalSize = UDim2.new(0,180,0,110)
+local miniSize = UDim2.new(0,180,0,30)
+
+MinBtn.MouseButton1Click:Connect(function()
+    miniState = not miniState
+    if miniState then
+        MainFrame.Size = miniSize
+        Content.Visible = false
+    else
+        MainFrame.Size = normalSize
+        Content.Visible = true
+    end
+end)
+
+--关闭UI，全部清理
+CloseBtn.MouseButton1Click:Connect(function()
+    enabled = false
+    if loopConn then loopConn:Disconnect() loopConn = nil end
+    if charAddedConn then charAddedConn:Disconnect() charAddedConn = nil end
+    if board then board:Destroy() board = nil end
+    ScreenGui:Destroy()
+end)
+
+--功能按钮
+local ToggleBtn = Instance.new("TextButton")
+ToggleBtn.Size = UDim2.new(0.85,0,0,35)
+ToggleBtn.Position = UDim2.new(0.075,0,0,12)
+ToggleBtn.BackgroundColor3 = Color3.new(0.2,0.6,0.2)
+ToggleBtn.Text = "开启踏空"
+ToggleBtn.TextColor3 = Color3.new(1,1,1)
+ToggleBtn.Font = Enum.Font.SourceSansBold
+ToggleBtn.TextSize =16
+ToggleBtn.Parent = Content
+
+local function destroyBoardLogic()
+    print("销毁踏空板")
+    if loopConn then loopConn:Disconnect() loopConn = nil end
+    if board then board:Destroy() board = nil end
+    boardY = nil
+    jumpPeakY = nil
+    isJumping = false
+end
+
+local function createBoard()
+    local old = workspace:FindFirstChild("WalkBoard")
+    if old then old:Destroy() end
+    local b = Instance.new("Part")
+    b.Name = "WalkBoard"
+    b.Size = Vector3.new(2,0.2,2)
+    b.Transparency = 1
+    b.CanCollide = true
+    b.CanTouch = false
+    b.Anchored = true
+    b.Massless = true
+    b.Parent = workspace
+    board = b
+end
+
+local function setupCharacter(char)
+    print("角色加载，初始化踏空")
+    destroyBoardLogic()
+    createBoard()
+    local hum = char:WaitForChild("Humanoid")
+    local root = char:WaitForChild("HumanoidRootPart")
+    boardY = root.Position.Y - 3.4
+    jumpPeakY = nil
+    isJumping = false
+
+    hum.Jumping:Connect(function(state)
+        if state and enabled then
+            isJumping = true
+            jumpPeakY = root.Position.Y
+        end
+    end)
+
+    loopConn = RunService.Stepped:Connect(function()
+        if not enabled then return end
+        if not (root and root:IsDescendantOf(workspace) and board) then return end
+        local plyY = root.Position.Y
+
+        if isJumping then
+            if plyY > jumpPeakY then
+                jumpPeakY = plyY
+            end
+            if plyY < jumpPeakY -0.3 then
+                isJumping = false
+                boardY = jumpPeakY - 3.4
+            end
+        end
+        board.Position = Vector3.new(root.Position.X, boardY, root.Position.Z)
+    end)
+end
+
+ToggleBtn.MouseButton1Click:Connect(function()
+    enabled = not enabled
+    print("点击按钮，enabled =",enabled)
+    if enabled then
+        ToggleBtn.Text = "关闭"
+        ToggleBtn.BackgroundColor3 = Color3.new(0.7,0.2,0.2)
+        --先断开旧的角色监听，防止重复绑定
+        if charAddedConn then charAddedConn:Disconnect() end
+        --立即处理当前角色
+        if LocalPlayer.Character then
+            setupCharacter(LocalPlayer.Character)
+        end
+        --监听重生
+        charAddedConn = LocalPlayer.CharacterAdded:Connect(function(c)
+            task.wait(0.15)
+            if enabled then
+                setupCharacter(c)
+            end
+        end)
+    else
+        ToggleBtn.Text = "开启"
+        ToggleBtn.BackgroundColor3 = Color3.new(0.2,0.6,0.2)
+        if charAddedConn then charAddedConn:Disconnect() charAddedConn = nil end
+        destroyBoardLogic()
+    end
+end)
+    generate()
+OrionLib:MakeNotification({Name="提示", Content="踏空行走脚本加载成功！", Time=3})
+    end
+})
 ScriptHubTab:AddButton({
     Name = "音频播放器",
     Callback = function()
@@ -6868,5 +7225,5 @@ StarterGui:SetCore("SendNotification", {
     Title = "🐱🐱🐱🐱🐱🐱🐱",
     Text = "喵喵喵喵喵喵喵喵喵喵喵喵",
     Icon = content,
-    Duration = 10
+    Duration = 5
 })
