@@ -8,7 +8,7 @@ local content, isReady = Players:GetUserThumbnailAsync(userId, thumbType, thumbS
 
 StarterGui:SetCore("SendNotification", {
     Title = "猫咪Hub 启动中！",
-    Text = "已解锁完整版权限！",
+    Text = "欢迎小食宝！",
     Icon = content,
     Duration = 1
 })
