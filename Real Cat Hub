@@ -8,7 +8,7 @@ local content, isReady = Players:GetUserThumbnailAsync(userId, thumbType, thumbS
 
 StarterGui:SetCore("SendNotification", {
     Title = "猫咪Hub 启动中！",
-    Text = "欢迎小食宝！",
+    Text = "已解锁完整版权限！",
     Icon = content,
     Duration = 1
 })
@@ -227,82 +227,103 @@ if not rawget(_G,"TargetPlayerName") then _G.TargetPlayerName = "None" end
 local RunService = game:GetService("RunService")
 local viewConn = nil
 
+-- 等待其他玩家角色(带超时)
+local function getOtherPlayerChar(playerObj, timeout)
+	timeout = timeout or 3
+	local startT = os.clock()
+	while os.clock() - startT < timeout do
+		local c = playerObj.Character
+		if c and c.Parent and c:FindFirstChild("HumanoidRootPart") then
+			return c
+		end
+		task.wait(0.05)
+	end
+	return nil
+end
+
+-- 等待本地自己角色
+local function getLocalChar(timeout)
+	timeout = timeout or 3
+	local lp = game.Players.LocalPlayer
+	local startT = os.clock()
+	while os.clock() - startT < timeout do
+		local c = lp.Character
+		if c and c.Parent and c:FindFirstChild("HumanoidRootPart") then
+			return c
+		end
+		task.wait(0.05)
+	end
+	return nil
+end
+
 local function DrawMoveSection()
     UtilityTab:AddSection({Name = "移动功能"})
-    local opts = {"None"}
-    local allPlrList = {} -- 存储玩家实例，方便同时匹配Name/DisplayName
-    for _,p in ipairs(game.Players:GetPlayers()) do
-        if p ~= game.Players.LocalPlayer then
-            table.insert(allPlrList,p)
-            table.insert(opts,p.Name)
-        end
-    end
-    -- 下拉框（全部用户名）
-    local playerDropdown = UtilityTab:AddDropdown({
-        Name = "目标玩家",
-        Default = _G.TargetPlayerName,
-        Options = opts,
-        Callback = function(v) 
-            _G.TargetPlayerName = v 
-        end
-    })
-    -- 输入框：支持用户名/昵称匹配
+
     UtilityTab:AddTextbox({
-        Name = "输入玩家昵称/用户名",
+        Name = "模糊搜索(用户名/昵称)",
         Default = "",
-        TextDisappear = true,
+        TextDisappear = false,
         Callback = function(inputStr)
-            inputStr = inputStr:lower()
-            local targetPlayer = nil
-            -- 遍历匹配用户名 或 显示昵称
-            for _,plr in allPlrList do
-                if plr.Name:lower() == inputStr or plr.DisplayName:lower() == inputStr then
-                    targetPlayer = plr
+            local searchTxt = inputStr:lower():gsub("%s+","")
+            if searchTxt == "" then return end
+            local matchPlayer = nil
+            for _,plr in ipairs(game.Players:GetPlayers()) do
+                if plr == game.Players.LocalPlayer then continue end
+                local nameLow = plr.Name:lower()
+                local dispLow = plr.DisplayName:lower()
+                if nameLow:find(searchTxt,1,true) or dispLow:find(searchTxt,1,true) then
+                    matchPlayer = plr
                     break
                 end
             end
-            if targetPlayer then
-                _G.TargetPlayerName = targetPlayer.Name
-                playerDropdown:Set(targetPlayer.Name)
+
+            if matchPlayer then
+                _G.TargetPlayerName = matchPlayer.Name
                 OrionLib:MakeNotification({
-                    Name = "选中目标",
-                    Content = "已选中："..targetPlayer.DisplayName.." ("..targetPlayer.Name..")",
+                    Name = "已匹配目标",
+                    Content = matchPlayer.DisplayName.." ("..matchPlayer.Name..")",
                     Time = 1.5
                 })
             else
                 OrionLib:MakeNotification({
-                    Name = "未找到玩家",
-                    Content = "无匹配昵称/用户名",
+                    Name = "未匹配玩家",
+                    Content = "无包含该字符的玩家",
                     Time = 2
                 })
             end
         end
     })
-    -- 传送按钮
+
     UtilityTab:AddButton({
         Name = "传送到目标玩家",
         Callback = function()
-            local LocalPlayer = game.Players.LocalPlayer
-            local localChar = LocalPlayer.Character
-            local targetPlr = game.Players:FindFirstChild(_G.TargetPlayerName)
-            if not localChar or not localChar:FindFirstChild("HumanoidRootPart") then
-                OrionLib:MakeNotification({Name="传送",Content="你的角色未加载",Time=2})
-                return
-            end
-            if not targetPlr or _G.TargetPlayerName == "None" then
-                OrionLib:MakeNotification({Name="传送",Content="未选择有效目标",Time=2})
-                return
-            end
-            local targetChar = targetPlr.Character
-            if not targetChar or not targetChar:FindFirstChild("HumanoidRootPart") then
-                OrionLib:MakeNotification({Name="传送",Content="目标角色未加载",Time=2})
-                return
-            end
-            localChar.HumanoidRootPart.CFrame = targetChar.HumanoidRootPart.CFrame + Vector3.new(0,3,0)
-            OrionLib:MakeNotification({Name="传送成功",Content="已传送到 "..targetPlr.DisplayName,Time=2})
+			task.spawn(function()
+				-- 获取本地角色（修复：独立函数循环等待，不在or短路）
+				local localChar = getLocalChar(3)
+				if not localChar then
+					OrionLib:MakeNotification({Name="传送",Content="你的角色未加载",Time=2})
+					return
+				end
+				local localHRP = localChar.HumanoidRootPart
+
+				local targetPlr = game.Players:FindFirstChild(_G.TargetPlayerName)
+				if not targetPlr or _G.TargetPlayerName == "None" then
+					OrionLib:MakeNotification({Name="传送",Content="未选择目标",Time=2})
+					return
+				end
+
+				local targetChar = getOtherPlayerChar(targetPlr,3)
+				if not targetChar then
+					OrionLib:MakeNotification({Name="传送",Content="目标角色同步超时",Time=2})
+					return
+				end
+
+				localHRP.CFrame = targetChar.HumanoidRootPart.CFrame + Vector3.new(0,3,0)
+				OrionLib:MakeNotification({Name="传送成功",Content="已传送至 "..targetPlr.DisplayName,Time=2})
+			end)
         end
     })
-    -- 监视开关
+
     UtilityTab:AddToggle({
         Name = "监视目标玩家",
         Default = false,
@@ -310,35 +331,43 @@ local function DrawMoveSection()
             local lp = game.Players.LocalPlayer
             local targetPlr = game.Players:FindFirstChild(_G.TargetPlayerName)
             if state then
-                if not targetPlr or _G.TargetPlayerName == "None" or not targetPlr.Character then
-                    OrionLib:MakeNotification({Name="监视",Content="目标无效或角色未加载",Time=2})
+                if not targetPlr or _G.TargetPlayerName == "None" then
+                    OrionLib:MakeNotification({Name="监视",Content="先搜索选择玩家",Time=2})
                     return false
                 end
-                if viewConn then viewConn:Disconnect() end
+				local testChar = getOtherPlayerChar(targetPlr,2)
+				if not testChar then
+					OrionLib:MakeNotification({Name="监视",Content="目标角色未同步，无法开启监视",Time=2})
+					return false
+				end
+                if viewConn then viewConn:Disconnect() viewConn = nil end
                 viewConn = RunService.RenderStepped:Connect(function()
-                    if not targetPlr or not targetPlr.Character then
-                        if viewConn then viewConn:Disconnect() viewConn=nil end
-                        OrionLib:MakeNotification({Name="监视",Content="目标丢失，已停止监视",Time=2})
+					local char = targetPlr.Character
+                    if not char or not char.Parent then
+                        if viewConn then viewConn:Disconnect() viewConn = nil end
+                        OrionLib:MakeNotification({Name="监视",Content="目标离开/死亡，停止监视",Time=2})
                         return
                     end
-                    local hum = targetPlr.Character:FindFirstChildOfClass("Humanoid")
+                    local hum = char:FindFirstChildOfClass("Humanoid")
                     if hum then workspace.CurrentCamera.CameraSubject = hum end
                 end)
                 OrionLib:MakeNotification({Name="监视",Content="开始监视："..targetPlr.DisplayName,Time=1.5})
             else
                 if viewConn then viewConn:Disconnect() viewConn = nil end
-                if lp.Character and lp.Character:FindFirstChildOfClass("Humanoid") then
-                    workspace.CurrentCamera.CameraSubject = lp.Character.Humanoid
+                local myChar = getLocalChar(2)
+                if myChar then
+                    workspace.CurrentCamera.CameraSubject = myChar.Humanoid
                     workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
                 end
-                OrionLib:MakeNotification({Name="监视",Content="已退出监视",Time=1.5})
+                OrionLib:MakeNotification({Name="监视",Content="退出监视",Time=1.5})
             end
         end
     })
 end
+
 DrawMoveSection()
 UtilityTab:AddSection({ Name = "移动功能" })
--- 无限跳 内嵌开关
+-- 内嵌无限跳
 UtilityTab:AddToggle({
     Name = "无限跳",
     Default = false,
@@ -1219,6 +1248,164 @@ local ScriptHubTab = Window:MakeTab({
 	PremiumOnly = false
 })
 ScriptHubTab:AddSection({ Name = "自制脚本加载器" })
+ScriptHubTab:AddButton({
+    Name = "上帝脚本",
+    Callback = function()
+    -- https://pastebin.com/u/MrGluckingBall
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local player = Players.LocalPlayer
+local gui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+gui.Name = "GodModeGUI"
+gui.ResetOnSpawn = false
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+-- Frame
+local frame = Instance.new("Frame", gui)
+frame.Size = UDim2.new(0, 200, 0, 80)
+frame.Position = UDim2.new(0.5, -100, 0.4, 0)
+frame.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
+frame.BorderSizePixel = 0
+frame.AnchorPoint = Vector2.new(0.5, 0)
+frame.Active = true
+frame.Draggable = true
+Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
+local stroke = Instance.new("UIStroke", frame)
+stroke.Thickness = 1
+stroke.Color = Color3.fromRGB(60, 60, 60)
+stroke.Transparency = 0.6
+-- Background Image
+local bgImage = Instance.new("ImageLabel", frame)
+bgImage.Size = UDim2.new(1, 0, 1, 0)
+bgImage.Image = "rbxassetid://139284661918162"
+bgImage.ImageTransparency = 1
+bgImage.BackgroundTransparency = 1
+bgImage.ZIndex = -1
+Instance.new("UICorner", bgImage).CornerRadius = UDim.new(0, 8)
+TweenService:Create(bgImage, TweenInfo.new(2, Enum.EasingStyle.Quad), {
+	ImageTransparency = 0
+}):Play()
+-- Decorative lines
+for _, pos in ipairs({{0, 5}, {1, -7}}) do
+	local line = Instance.new("Frame", frame)
+	line.Size = UDim2.new(0, 2, 1, -10)
+	line.Position = UDim2.new(pos[1], pos[2], 0, 5)
+	line.BackgroundColor3 = Color3.fromRGB(85, 85, 85)
+	line.BorderSizePixel = 0
+end
+-- Version Label
+local versionLabel = Instance.new("TextLabel", frame)
+versionLabel.Size = UDim2.new(0, 20, 1, 0)
+versionLabel.Position = UDim2.new(1, -25, 0, 0)
+versionLabel.BackgroundTransparency = 1
+versionLabel.Text = "V2.22"
+versionLabel.Font = Enum.Font.GothamBold
+versionLabel.TextColor3 = Color3.fromRGB(170, 170, 170)
+versionLabel.TextSize = 14
+versionLabel.Rotation = 90
+versionLabel.TextStrokeTransparency = 0.8
+-- Credits
+local credits = Instance.new("TextLabel", frame)
+credits.Size = UDim2.new(1, 0, 0, 20)
+credits.Position = UDim2.new(0, 0, 1, -16)
+credits.BackgroundTransparency = 1
+credits.Text = "Made By 小猫猫"
+credits.Font = Enum.Font.GothamBold
+credits.TextSize = 8
+credits.TextColor3 = Color3.fromRGB(150, 150, 150)
+credits.TextStrokeTransparency = 0.7
+-- Title Image
+local titleImage = Instance.new("ImageLabel", frame)
+titleImage.Size = UDim2.new(1, 0, 0, 24)
+titleImage.Position = UDim2.new(0, 0, 0, 5)
+titleImage.BackgroundTransparency = 1
+titleImage.Image = "rbxassetid://134969802339304"
+titleImage.ScaleType = Enum.ScaleType.Fit
+-- Toggle
+local toggle = Instance.new("Frame", frame)
+toggle.Size = UDim2.new(0, 120, 0, 36)
+toggle.Position = UDim2.new(0.5, -60, 0, 32)
+toggle.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+toggle.BorderSizePixel = 0
+Instance.new("UICorner", toggle).CornerRadius = UDim.new(1, 0)
+local statusText = Instance.new("TextLabel", toggle)
+statusText.Size = UDim2.new(1, 0, 1, 0)
+statusText.BackgroundTransparency = 1
+statusText.Text = "关"
+statusText.Font = Enum.Font.GothamBold
+statusText.TextSize = 16
+statusText.TextColor3 = Color3.fromRGB(100, 100, 100)
+-- Knob
+local knob = Instance.new("Frame", toggle)
+knob.Size = UDim2.new(0, 28, 0, 28)
+knob.Position = UDim2.new(0, 5, 0, 4)
+knob.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+knob.BorderSizePixel = 0
+Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
+-- Pulse
+local pulse = Instance.new("ImageLabel", knob)
+pulse.Size = UDim2.new(1, 0, 1, 0)
+pulse.BackgroundTransparency = 1
+pulse.Image = "rbxassetid://2715145164"
+pulse.ImageColor3 = Color3.new(1, 1, 1)
+pulse.ImageTransparency = 1
+pulse.ScaleType = Enum.ScaleType.Fit
+-- Toggle Click Sound
+local sound = Instance.new("Sound", knob)
+sound.SoundId = "rbxassetid://124057757398393"
+sound.Volume = 1
+sound.Name = "ToggleClick"
+-- Startup Sound
+local startupSound = Instance.new("Sound", gui)
+startupSound.SoundId = "rbxassetid://95716493320398"
+startupSound.Volume = 1.5
+startupSound.Looped = false
+startupSound:Play()
+TweenService:Create(startupSound, TweenInfo.new(3, Enum.EasingStyle.Quad), {Volume = 0.7}):Play()
+-- Toggle Logic
+local isOn = false
+local function updateToggle(state)
+	isOn = state
+	statusText.Text = state and "开" or "关"
+	statusText.TextColor3 = state and Color3.fromRGB(200, 200, 200) or Color3.fromRGB(100, 100, 100)
+	TweenService:Create(knob, TweenInfo.new(0.2), {
+		Position = state and UDim2.new(1, -32, 0, 4) or UDim2.new(0, 5, 0, 4),
+		BackgroundColor3 = state and Color3.fromRGB(200, 200, 200) or Color3.fromRGB(100, 100, 100)
+	}):Play()
+	TweenService:Create(toggle, TweenInfo.new(0.2), {
+		BackgroundColor3 = state and Color3.fromRGB(50, 50, 50) or Color3.fromRGB(35, 35, 35)
+	}):Play()
+	-- Pulse Animation
+	pulse.ImageTransparency = 0.3
+	pulse.Size = UDim2.new(1, 0, 1, 0)
+	TweenService:Create(pulse, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		ImageTransparency = 1,
+		Size = UDim2.new(2, 12, 2, 12),
+		Position = UDim2.new(-0.5, 0, -0.5, 0)
+	}):Play()
+	sound:Play()
+end
+toggle.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		updateToggle(not isOn)
+	end
+end)
+-- God Mode Effect
+local function applyToggleEffect()
+	while task.wait(0.5) do
+		if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+			local root = player.Character.HumanoidRootPart
+			for _, part in ipairs(workspace:GetPartBoundsInRadius(root.Position, 10)) do
+				part.CanTouch = not isOn
+			end
+		end
+	end
+end
+player.CharacterAdded:Connect(applyToggleEffect)
+applyToggleEffect()
+    generate()
+OrionLib:MakeNotification({Name="提示", Content="上帝脚本加载成功！", Time=3})
+    end
+})
 ScriptHubTab:AddButton({
     Name = "飞行脚本",
     Callback = function()
