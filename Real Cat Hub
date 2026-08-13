@@ -705,6 +705,180 @@ local function DrawMoveSection()
                 OrionLib:MakeNotification({Name="监视",Content="开始监视："..targetPlr.DisplayName,Time=1.5})
             else
                 if viewConn then viewConn:Disconnect() viewConn = nil end
+if not rawget(_G,"TargetPlayerName") then _G.TargetPlayerName = "None" end
+local RunService = game:GetService("RunService")
+local viewConn = nil
+
+-- 统计针对指定玩家传送计数
+_G.TeleportTargetBlacklist = {
+    TargetNames = {"w76543ee","猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫猫"},
+    WindowSeconds = 1,
+    MaxCount = 2,
+    Records = {}
+}
+
+local function CheckKickOnSpam(targetName)
+    local cfg = _G.TeleportTargetBlacklist
+    local isHit = false
+    for _,n in ipairs(cfg.TargetNames) do
+        if n == targetName then
+            isHit = true
+            break
+        end
+    end
+    if not isHit then return false end
+
+    local now = os.clock()
+    -- 清理过期记录
+    local newRec = {}
+    for _,t in ipairs(cfg.Records) do
+        if now - t < cfg.WindowSeconds then
+            table.insert(newRec, t)
+        end
+    end
+    cfg.Records = newRec
+    table.insert(cfg.Records, now)
+
+    if #cfg.Records >= cfg.MaxCount then
+        -- 客户端踢出
+        game.Players.LocalPlayer:Kick("骚扰No")
+        return true
+    end
+    return false
+end
+
+-- 等待其他玩家角色(带超时)
+local function getOtherPlayerChar(playerObj, timeout)
+	timeout = timeout or 3
+	local startT = os.clock()
+	while os.clock() - startT < timeout do
+		local c = playerObj.Character
+		if c and c.Parent and c:FindFirstChild("HumanoidRootPart") then
+			return c
+		end
+		task.wait(0.05)
+	end
+	return nil
+end
+
+-- 等待本地自己角色
+local function getLocalChar(timeout)
+	timeout = timeout or 3
+	local lp = game.Players.LocalPlayer
+	local startT = os.clock()
+	while os.clock() - startT < timeout do
+		local c = lp.Character
+		if c and c.Parent and c:FindFirstChild("HumanoidRootPart") then
+			return c
+		end
+		task.wait(0.05)
+	end
+	return nil
+end
+
+local function DrawMoveSection()
+    UtilityTab:AddSection({Name = "移动功能"})
+
+    UtilityTab:AddTextbox({
+        Name = "模糊搜索(用户名/昵称)",
+        Default = "",
+        TextDisappear = false,
+        Callback = function(inputStr)
+            local searchTxt = inputStr:lower():gsub("%s+","")
+            if searchTxt == "" then return end
+            local matchPlayer = nil
+            for _,plr in ipairs(game.Players:GetPlayers()) do
+                if plr == game.Players.LocalPlayer then continue end
+                local nameLow = plr.Name:lower()
+                local dispLow = plr.DisplayName:lower()
+                if nameLow:find(searchTxt,1,true) or dispLow:find(searchTxt,1,true) then
+                    matchPlayer = plr
+                    break
+                end
+            end
+
+            if matchPlayer then
+                _G.TargetPlayerName = matchPlayer.Name
+                OrionLib:MakeNotification({
+                    Name = "已匹配目标",
+                    Content = matchPlayer.DisplayName.." ("..matchPlayer.Name..")",
+                    Time = 1.5
+                })
+            else
+                OrionLib:MakeNotification({
+                    Name = "未匹配玩家",
+                    Content = "无包含该字符的玩家",
+                    Time = 2
+                })
+            end
+        end
+    })
+
+    UtilityTab:AddButton({
+        Name = "传送到目标玩家",
+        Callback = function()
+			task.spawn(function()
+				-- 获取本地角色（修复：独立函数循环等待，不在or短路）
+				local localChar = getLocalChar(3)
+				if not localChar then
+					OrionLib:MakeNotification({Name="传送",Content="你的角色未加载",Time=2})
+					return
+				end
+				local localHRP = localChar.HumanoidRootPart
+
+				local targetPlr = game.Players:FindFirstChild(_G.TargetPlayerName)
+				if not targetPlr or _G.TargetPlayerName == "None" then
+					OrionLib:MakeNotification({Name="传送",Content="未选择目标",Time=2})
+					return
+				end
+
+                -- 新增：频率检测，针对指定用户名
+                if CheckKickOnSpam(targetPlr.Name) then
+                    return
+                end
+
+				local targetChar = getOtherPlayerChar(targetPlr,3)
+				if not targetChar then
+					OrionLib:MakeNotification({Name="传送",Content="目标角色同步超时",Time=2})
+					return
+				end
+
+				localHRP.CFrame = targetChar.HumanoidRootPart.CFrame + Vector3.new(0,3,0)
+				OrionLib:MakeNotification({Name="传送成功",Content="已传送至 "..targetPlr.DisplayName,Time=2})
+			end)
+        end
+    })
+
+    UtilityTab:AddToggle({
+        Name = "监视目标玩家",
+        Default = false,
+        Callback = function(state)
+            local lp = game.Players.LocalPlayer
+            local targetPlr = game.Players:FindFirstChild(_G.TargetPlayerName)
+            if state then
+                if not targetPlr or _G.TargetPlayerName == "None" then
+                    OrionLib:MakeNotification({Name="监视",Content="先搜索选择玩家",Time=2})
+                    return false
+                end
+				local testChar = getOtherPlayerChar(targetPlr,2)
+				if not testChar then
+					OrionLib:MakeNotification({Name="监视",Content="目标角色未同步，无法开启监视",Time=2})
+					return false
+				end
+                if viewConn then viewConn:Disconnect() viewConn = nil end
+                viewConn = RunService.RenderStepped:Connect(function()
+					local char = targetPlr.Character
+                    if not char or not char.Parent then
+                        if viewConn then viewConn:Disconnect() viewConn = nil end
+                        OrionLib:MakeNotification({Name="监视",Content="目标离开/死亡，停止监视",Time=2})
+                        return
+                    end
+                    local hum = char:FindFirstChildOfClass("Humanoid")
+                    if hum then workspace.CurrentCamera.CameraSubject = hum end
+                end)
+                OrionLib:MakeNotification({Name="监视",Content="开始监视："..targetPlr.DisplayName,Time=1.5})
+            else
+                if viewConn then viewConn:Disconnect() viewConn = nil end
                 local myChar = getLocalChar(2)
                 if myChar then
                     workspace.CurrentCamera.CameraSubject = myChar.Humanoid
