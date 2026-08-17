@@ -1,0 +1,336 @@
+-- ==========================================
+-- 声呐扫描 + 高亮触发（白色强光球体版）
+-- 点击“发射声呐” → 白色发光球体扩散 → 扫到的物体高亮
+-- 场景保持黑暗直到最后一个球消失
+-- ==========================================
+
+-- ===== 配置（可调） =====
+local PULSE_KEY = Enum.KeyCode.Q
+local WAVE_SPEED = 55
+local MAX_RADIUS = 75
+local RING_WIDTH = 3.5
+local HIGHLIGHT_DURATION = 0.6
+local DARK_BRIGHTNESS = 0.15
+local DARK_AMBIENT = Color3.new(0.1, 0.1, 0.1)
+
+-- 高亮颜色（金黄色）
+local HIGHLIGHT_COLOR = Color3.fromRGB(255, 220, 0)
+
+-- ★ 球体发光参数（白色，完全不透明，内部全亮）
+local GLOW_COLOR = Color3.new(1, 1, 1)           -- 纯白色
+local INITIAL_GLOW_SIZE = 0.5
+local INITIAL_TRANSPARENCY = 0                    -- 完全不透明，实心白色
+local FINAL_TRANSPARENCY = 0.95                   -- 最后淡出消失
+
+-- ★ 点光源参数（白色强光，范围较大）
+local POINTLIGHT_ENABLED = true
+local POINTLIGHT_RANGE = 10                      -- 扩大范围
+local POINTLIGHT_BRIGHTNESS = 12                 -- 极高亮度
+
+-- ===== 服务 =====
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local Lighting = game:GetService("Lighting")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+-- ===== 保存原始亮度 =====
+local originalBrightness = Lighting.Brightness
+local originalAmbient = Lighting.Ambient
+
+-- ===== 取消恢复任务的变量 =====
+local restoreTask = nil
+
+-- ===== 高亮管理 =====
+local highlightMap = {}
+
+local function AddHighlight(obj, duration)
+    if not obj then return end
+    if obj:IsDescendantOf(Character) or obj:IsDescendantOf(LocalPlayer) then return end
+    if highlightMap[obj] then
+        highlightMap[obj].expireTime = tick() + duration
+        return
+    end
+    local hl = Instance.new("Highlight")
+    hl.Name = "SonarHighlight"
+    hl.Adornee = obj
+    hl.FillColor = HIGHLIGHT_COLOR
+    hl.FillTransparency = 0.45
+    hl.OutlineTransparency = 0
+    hl.OutlineColor = HIGHLIGHT_COLOR
+    hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    hl.Parent = obj
+    highlightMap[obj] = { Highlight = hl, expireTime = tick() + duration }
+end
+
+local function RemoveHighlight(obj)
+    local data = highlightMap[obj]
+    if data then
+        local hl = data.Highlight
+        highlightMap[obj] = nil
+        if hl then
+            local tween = TweenService:Create(hl, TweenInfo.new(0.3, Enum.EasingStyle.Linear), {
+                FillTransparency = 1,
+                OutlineTransparency = 1
+            })
+            tween:Play()
+            tween.Completed:Connect(function()
+                hl:Destroy()
+            end)
+        end
+    end
+end
+
+local function ClearAllHighlights()
+    local objs = {}
+    for obj, _ in pairs(highlightMap) do
+        table.insert(objs, obj)
+    end
+    for _, obj in ipairs(objs) do
+        RemoveHighlight(obj)
+    end
+end
+
+local function CleanExpired()
+    local now = tick()
+    for obj, data in pairs(highlightMap) do
+        if data.expireTime <= now then
+            RemoveHighlight(obj)
+        end
+    end
+end
+
+-- ===== 工具函数 =====
+local function GetObjectPosition(obj)
+    if obj:IsA("BasePart") then return obj.Position end
+    if obj:IsA("Model") then
+        local root = obj:FindFirstChildOfClass("BasePart")
+        return root and root.Position or obj:GetPivot().Position
+    end
+    return nil
+end
+
+local function GetHighlightTarget(part)
+    if not part:IsA("BasePart") then return part end
+    local parent = part.Parent
+    while parent do
+        if parent:IsA("Model") and not parent:IsDescendantOf(Character) and not parent:IsDescendantOf(LocalPlayer) then
+            return parent
+        end
+        parent = parent.Parent
+    end
+    return part
+end
+
+-- ===== 亮度控制 =====
+local function DimLighting()
+    local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    TweenService:Create(Lighting, tweenInfo, {Brightness = DARK_BRIGHTNESS}):Play()
+    TweenService:Create(Lighting, tweenInfo, {Ambient = DARK_AMBIENT}):Play()
+end
+
+local function RestoreLighting()
+    local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    TweenService:Create(Lighting, tweenInfo, {Brightness = originalBrightness}):Play()
+    TweenService:Create(Lighting, tweenInfo, {Ambient = originalAmbient}):Play()
+end
+
+-- ===== 触发声呐脉冲 =====
+local function FireSonarPulse()
+    local rootPart = Character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return end
+    local origin = rootPart.Position
+
+    -- 取消之前设置的恢复任务
+    if restoreTask then
+        task.cancel(restoreTask)
+        restoreTask = nil
+    end
+
+    -- 场景变暗
+    DimLighting()
+
+    -- 创建白色发光球体（完全不透明）
+    local glow = Instance.new("Part")
+    glow.Name = "SonarGlow"
+    glow.Anchored = true
+    glow.CanCollide = false
+    glow.CanQuery = false
+    glow.Material = Enum.Material.Neon
+    glow.Shape = Enum.PartType.Ball
+    glow.Size = Vector3.new(INITIAL_GLOW_SIZE, INITIAL_GLOW_SIZE, INITIAL_GLOW_SIZE)
+    glow.Position = origin
+    glow.Color = GLOW_COLOR
+    glow.Transparency = INITIAL_TRANSPARENCY
+    glow.Parent = Workspace
+
+    -- 添加白色点光源（强光）
+    if POINTLIGHT_ENABLED then
+        local light = Instance.new("PointLight")
+        light.Parent = glow
+        light.Color = GLOW_COLOR
+        light.Range = POINTLIGHT_RANGE
+        light.Brightness = POINTLIGHT_BRIGHTNESS
+        light.Name = "GlowLight"
+    end
+
+    local lastRadius = 0
+    local pulseStartTime = tick()
+    local currentRadius = 0
+
+    local conn
+    conn = RunService.Heartbeat:Connect(function(dt)
+        local elapsed = tick() - pulseStartTime
+        currentRadius = WAVE_SPEED * elapsed
+        if currentRadius > MAX_RADIUS then
+            currentRadius = MAX_RADIUS
+            conn:Disconnect()
+            glow:Destroy()
+            return
+        end
+
+        -- 更新球体：放大 + 淡出
+        local size = currentRadius * 2
+        glow.Size = Vector3.new(size, size, size)
+        glow.Position = origin
+        local progress = currentRadius / MAX_RADIUS
+        glow.Transparency = INITIAL_TRANSPARENCY + (FINAL_TRANSPARENCY - INITIAL_TRANSPARENCY) * progress
+
+        -- 点光源保持恒定（白色强光）
+        if POINTLIGHT_ENABLED then
+            local light = glow:FindFirstChild("GlowLight")
+            if light then
+                light.Brightness = POINTLIGHT_BRIGHTNESS
+                light.Range = POINTLIGHT_RANGE
+            end
+        end
+
+        -- 检测高亮（每增加2 studs更新一次）
+        if currentRadius - lastRadius > 2 then
+            lastRadius = currentRadius
+
+            -- 移除球壳外高亮（但为了避免干扰其他球体，我们只移除由本球体触发的高亮？此处为简化，仅添加，不移除，让过期处理）
+            -- 因此只添加新高亮，不移除旧的
+            -- 但要避免重复添加相同物体，由AddHighlight内部处理
+
+            local searchRadius = currentRadius + RING_WIDTH
+            local partsInRadius = Workspace:GetPartBoundsInRadius(origin, searchRadius, 0)
+            for _, part in ipairs(partsInRadius) do
+                if part:IsA("BasePart") then
+                    local dist = (part.Position - origin).Magnitude
+                    if math.abs(dist - currentRadius) <= RING_WIDTH then
+                        local target = GetHighlightTarget(part)
+                        if target then
+                            if not highlightMap[target] then
+                                AddHighlight(target, HIGHLIGHT_DURATION)
+                            else
+                                highlightMap[target].expireTime = tick() + HIGHLIGHT_DURATION
+                            end
+                        end
+                    end
+                end
+            end
+
+            CleanExpired()
+        end
+    end)
+
+    -- ★ 设置延迟恢复亮度（确保所有球体消失后）
+    local delayTime = MAX_RADIUS / WAVE_SPEED + 0.5
+    restoreTask = task.delay(delayTime, function()
+        restoreTask = nil
+        RestoreLighting()
+        -- 不主动清除高亮，让它们自然过期
+    end)
+
+    -- 安全兜底
+    task.delay(MAX_RADIUS / WAVE_SPEED + 1, function()
+        if conn and conn.Connected then conn:Disconnect() end
+        glow:Destroy()
+    end)
+end
+
+-- ==========================================
+-- UI 界面（ESP风格）
+-- ==========================================
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "SonarGui"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.Parent = PlayerGui
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 200, 0, 90)
+MainFrame.Position = UDim2.new(0.02, 0, 0.52, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
+MainFrame.BorderSizePixel = 1
+MainFrame.BorderColor3 = Color3.fromRGB(70, 70, 70)
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size = UDim2.new(0, 24, 0, 24)
+CloseBtn.Position = UDim2.new(1, -26, 0, 2)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(160, 30, 30)
+CloseBtn.Text = "X"
+CloseBtn.TextColor3 = Color3.new(1, 1, 1)
+CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.TextSize = 14
+CloseBtn.Parent = MainFrame
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, -30, 0, 30)
+Title.Position = UDim2.new(0, 4, 0, 0)
+Title.BackgroundTransparency = 1
+Title.Text = "⚪ 白色声呐"
+Title.TextColor3 = Color3.new(1, 1, 1)
+Title.Font = Enum.Font.Gotham
+Title.TextSize = 14
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = MainFrame
+
+local ToggleBtn = Instance.new("TextButton")
+ToggleBtn.Size = UDim2.new(0, 130, 0, 36)
+ToggleBtn.Position = UDim2.new(0.5, -65, 0, 45)
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(70, 175, 70)
+ToggleBtn.Text = "发射声呐"
+ToggleBtn.TextColor3 = Color3.new(1, 1, 1)
+ToggleBtn.Font = Enum.Font.Gotham
+ToggleBtn.TextSize = 14
+ToggleBtn.Parent = MainFrame
+
+ToggleBtn.MouseButton1Click:Connect(FireSonarPulse)
+
+CloseBtn.MouseButton1Click:Connect(function()
+    if restoreTask then
+        task.cancel(restoreTask)
+        restoreTask = nil
+    end
+    ClearAllHighlights()
+    RestoreLighting()
+    ScreenGui:Destroy()
+end)
+
+-- ===== 键盘快捷键 =====
+UserInputService.InputBegan:Connect(function(input, processed)
+    if processed then return end
+    if input.KeyCode == PULSE_KEY then
+        FireSonarPulse()
+    end
+end)
+
+-- ===== 角色重生重置 =====
+LocalPlayer.CharacterAdded:Connect(function(newChar)
+    Character = newChar
+    ClearAllHighlights()
+    if restoreTask then
+        task.cancel(restoreTask)
+        restoreTask = nil
+    end
+    RestoreLighting()
+end)
