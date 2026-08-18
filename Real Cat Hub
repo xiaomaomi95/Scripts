@@ -832,14 +832,14 @@ UtilityTab:AddToggle({
         local boxTag = "Obj_SelectionBox"
 
         -- 销毁旧连接
-        if rawget(_G,"ObjBoxConn") then
+        if rawget(_G, "ObjBoxConn") then
             _G.ObjBoxConn:Disconnect()
             _G.ObjBoxConn = nil
         end
 
         -- 清除全部线框
         local function wipeAllBox()
-            for _,v in ipairs(Workspace:GetDescendants()) do
+            for _, v in ipairs(Workspace:GetDescendants()) do
                 if v:IsA("SelectionBox") and v.Name == boxTag then
                     v:Destroy()
                 end
@@ -852,13 +852,8 @@ UtilityTab:AddToggle({
         end
 
         _G.ObjBoxConn = RunService.Heartbeat:Connect(function()
-            local localChar = LocalPlayer.Character
-            for _,obj in ipairs(Workspace:GetDescendants()) do
-                -- 跳过自己角色
-                if localChar and obj:IsDescendantOf(localChar) then
-                    continue
-                end
-
+            for _, obj in ipairs(Workspace:GetDescendants()) do
+                -- 确定目标零件
                 local target = nil
                 if obj:IsA("BasePart") then
                     target = obj
@@ -866,11 +861,26 @@ UtilityTab:AddToggle({
                     target = obj.PrimaryPart
                 end
 
-                if target and not target:FindFirstChild(boxTag) then
+                if not target then
+                    continue
+                end
+
+                -- ===== 核心修复：通过模型反查所属玩家 =====
+                local ancestorModel = target:FindFirstAncestorWhichIsA("Model")
+                if ancestorModel then
+                    local owner = game.Players:GetPlayerFromCharacter(ancestorModel)
+                    -- 如果是本地玩家（自己）的零件，直接跳过，不添加线框
+                    if owner == LocalPlayer then
+                        continue
+                    end
+                end
+
+                -- 添加线框（仅针对非自己的物体）
+                if not target:FindFirstChild(boxTag) then
                     local sb = Instance.new("SelectionBox")
                     sb.Name = boxTag
                     sb.Adornee = target
-                    sb.Color3 = Color3.fromRGB(0,255,255)
+                    sb.Color3 = Color3.fromRGB(0, 255, 255)
                     sb.LineThickness = 0.05
                     sb.Parent = target
                 end
