@@ -8,7 +8,7 @@ local content, isReady = Players:GetUserThumbnailAsync(userId, thumbType, thumbS
 
 StarterGui:SetCore("SendNotification", {
     Title = "猫咪Hub 启动中！",
-    Text = "未在黑名单，欢迎！",
+    Text = "已解锁完整版权限！",
     Icon = content,
     Duration = 1
 })
@@ -218,6 +218,26 @@ local Window = OrionLib:MakeWindow({
 -- ====================================================================
 -- Utilities Tab
 -- ====================================================================
+-- 信息与支持
+-- ====================================================================
+local UtilityTab = Window:MakeTab({
+	Name = "信息栏",
+	Icon = "rbxassetid://4483362458",
+	PremiumOnly = false
+})
+UtilityTab:AddSection({ Name = "玩家信息" })
+UtilityTab:AddLabel("当前玩家：" .. LocalPlayer.Name)
+UtilityTab:AddLabel("默认FOV: " .. UtilityConfig.FOV .. "")
+UtilityTab:AddSection({ Name = "版本详情" })
+UtilityTab:AddLabel("版本：V6")
+UtilityTab:AddLabel("免费脚本，禁止倒卖！")
+UtilityTab:AddSection({ Name = "群聊链接" })
+UtilityTab:AddButton({
+	Name = "加入QQ群",
+	Callback = function()
+		copyToClipboard("https://qm.qq.com/q/dOOrgV2k4o", "QQ Link")
+	end
+})
 local UtilityTab = Window:MakeTab({
 	Name = "玩家功能",
 	Icon = "rbxassetid://4483362458",
@@ -592,9 +612,6 @@ UtilityTab:AddSlider({
         end
     end
 })
-UtilityTab:AddSection({ Name = "信息栏" })
-UtilityTab:AddLabel("当前玩家：" .. LocalPlayer.Name)
-UtilityTab:AddLabel("默认FOV: " .. UtilityConfig.FOV .. "")
 local UtilityTab = Window:MakeTab({
 	Name = "聊天功能",
 	Icon = "rbxassetid://4483362458",
@@ -8533,23 +8550,6 @@ InfoTab:AddButton({
 	end
 })
 -- ====================================================================
--- 信息与支持
--- ====================================================================
-local InfoTab = Window:MakeTab({
-	Name = "信息与支持",
-	Icon = "rbxassetid://4483362458",
-	PremiumOnly = false
-})
-InfoTab:AddSection({ Name = "版本详情" })
-InfoTab:AddLabel("版本：V6")
-InfoTab:AddLabel("免费脚本，禁止倒卖！")
-InfoTab:AddSection({ Name = "群聊链接" })
-InfoTab:AddButton({
-	Name = "加入QQ群",
-	Callback = function()
-		copyToClipboard("https://qm.qq.com/q/dOOrgV2k4o", "QQ Link")
-	end
-})
 -- ====================================================================
 -- Initialization
 -- ====================================================================
