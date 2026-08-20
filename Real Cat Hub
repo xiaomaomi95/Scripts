@@ -309,7 +309,7 @@ local function getLocalChar(timeout)
 end
 
 local function DrawMoveSection()
-    UtilityTab:AddSection({Name = "移动功能"})
+    UtilityTab:AddSection({Name = "搜索玩家功能"})
 
     UtilityTab:AddTextbox({
         Name = "模糊搜索(用户名/昵称)",
@@ -612,6 +612,50 @@ UtilityTab:AddSlider({
         end
     end
 })
+UtilityTab:AddSection({ Name = "玩家动作" })
+UtilityTab:AddButton({
+    Name = "玩家坐下",
+    Callback = function()
+        local LocalPlayer = game.Players.LocalPlayer
+        local char = LocalPlayer.Character
+        if char then
+            local humanoid = char:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                humanoid.Sit = true
+            end
+        end
+    end
+})
+UtilityTab:AddButton({
+    Name = "取消坐下",
+    Callback = function()
+        local LocalPlayer = game.Players.LocalPlayer
+        local char = LocalPlayer.Character
+        if char then
+            local humanoid = char:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                humanoid.Sit = false
+            end
+        end
+    end
+})
+UtilityTab:AddSection({ Name = "丢弃工具（手持不可丢弃的物品也会消失）" })
+UtilityTab:AddButton({
+    Name = "丢弃手持工具",
+    Callback = function()
+        local LocalPlayer = game.Players.LocalPlayer
+        local char = LocalPlayer.Character
+        if char then
+            local tool = char:FindFirstChildOfClass("Tool")
+            if tool then
+                tool.Parent = workspace
+                OrionLib:MakeNotification({Name="丢弃工具",Content="已丢弃当前手持物品",Time=2})
+            else
+                OrionLib:MakeNotification({Name="丢弃工具",Content="当前没有手持工具",Time=2})
+            end
+        end
+    end
+})
 local UtilityTab = Window:MakeTab({
 	Name = "聊天功能",
 	Icon = "rbxassetid://4483362458",
@@ -667,55 +711,6 @@ UtilityTab:AddTextbox({
             end)
         end
     })
-local UtilityTab = Window:MakeTab({
-	Name = "玩家类功能",
-	Icon = "rbxassetid://4483362458",
-	PremiumOnly = false
-})
-UtilityTab:AddSection({ Name = "玩家动作" })
-UtilityTab:AddButton({
-    Name = "玩家坐下",
-    Callback = function()
-        local LocalPlayer = game.Players.LocalPlayer
-        local char = LocalPlayer.Character
-        if char then
-            local humanoid = char:FindFirstChildOfClass("Humanoid")
-            if humanoid then
-                humanoid.Sit = true
-            end
-        end
-    end
-})
-UtilityTab:AddButton({
-    Name = "取消坐下",
-    Callback = function()
-        local LocalPlayer = game.Players.LocalPlayer
-        local char = LocalPlayer.Character
-        if char then
-            local humanoid = char:FindFirstChildOfClass("Humanoid")
-            if humanoid then
-                humanoid.Sit = false
-            end
-        end
-    end
-})
-UtilityTab:AddSection({ Name = "丢弃工具（手持不可丢弃的物品也会消失）" })
-UtilityTab:AddButton({
-    Name = "丢弃手持工具",
-    Callback = function()
-        local LocalPlayer = game.Players.LocalPlayer
-        local char = LocalPlayer.Character
-        if char then
-            local tool = char:FindFirstChildOfClass("Tool")
-            if tool then
-                tool.Parent = workspace
-                OrionLib:MakeNotification({Name="丢弃工具",Content="已丢弃当前手持物品",Time=2})
-            else
-                OrionLib:MakeNotification({Name="丢弃工具",Content="当前没有手持工具",Time=2})
-            end
-        end
-    end
-})
 local UtilityTab = Window:MakeTab({
 	Name = "ESP功能",
 	Icon = "rbxassetid://4483362458",
