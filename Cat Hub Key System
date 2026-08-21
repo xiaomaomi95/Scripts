@@ -1,24 +1,24 @@
 -- ============================================================
--- 猫咪Hub V6 一人一码验证系统
+-- 猫咪Hub V6 一人一码验证系统（含远程白名单）
 -- 作者：小猫猫
--- 说明：每个密钥只能绑定一个玩家，防止共享
--- 卡密存储：GitHub
--- 绑定存储：jsonbin.io
+-- 说明：每个密钥只能绑定一个玩家，防止共享；支持远程白名单直接跳过验证
+-- 卡密存储：GitHub | 绑定存储：jsonbin.io | 白名单：GitHub
 -- ============================================================
 
--- ===== 配置区（已全部填好） =====
+-- ===== 配置区 =====
 local CONFIG = {
     -- 猫咪Hub远程加载URL
     HUB_URL = "https://raw.githubusercontent.com/xiaomaomi95/Scripts/refs/heads/main/Cat%20Hub%20Portal",
-    
-    -- GitHub 卡密列表（已配置）
     REMOTE_KEYS_URL = "https://raw.githubusercontent.com/xiaomaomi95/Scripts/refs/heads/main/Bypass%20Key%20System",
     
-    -- jsonbin.io 配置（已配置）
+    -- jsonbin.io 配置
     JSONBIN_API_KEY = "$2a$10$A5r4uGQOWUozMUvyuWjMyuLjbjwCLMdvTysLcd1ks1eF6Jg9ZT2he",
     JSONBIN_BIN_ID = "6a85822ef5f4af5e2928094f",
     
-    -- 本地备用（禁用）
+    -- ===== 远程白名单 =====
+    WHITELIST_URL = "https://raw.githubusercontent.com/xiaomaomi95/Scripts/refs/heads/main/name",  -- 请替换为实际链接
+    
+    -- 本地备用（禁止使用）
     ENABLE_LOCAL_FALLBACK = false,
     LOCAL_KEYS = {},
 }
@@ -42,7 +42,7 @@ local isLoading = false
 local currentPlayerId = tostring(LocalPlayer.UserId)
 
 -- ============================================================
--- 2. 远程加载卡密列表（GitHub）
+-- 2. 远程加载卡密列表
 -- ============================================================
 local function loadRemoteKeys()
     if not CONFIG.REMOTE_KEYS_URL or CONFIG.REMOTE_KEYS_URL == "" then
@@ -60,9 +60,7 @@ local function loadRemoteKeys()
     end
     
     local count = 0
-    -- 按行分割，同时也支持空格分隔
     for line in string.gmatch(response, "[^\r\n]+") do
-        -- 如果一行中有多个用空格分隔的卡密，也解析
         for key in string.gmatch(line, "%S+") do
             local trimmed = key:gsub("^%s+", ""):gsub("%s+$", "")
             if trimmed ~= "" then
@@ -73,6 +71,39 @@ local function loadRemoteKeys()
     end
     
     print("[猫咪Hub] 远程卡密加载成功，共 " .. count .. " 个")
+    return count > 0
+end
+
+-- ============================================================
+-- 2.5 远程加载白名单
+-- ============================================================
+local whitelist = {}  -- 白名单集合，键为UserId
+
+local function loadWhitelist()
+    if not CONFIG.WHITELIST_URL or CONFIG.WHITELIST_URL == "" then
+        return false  -- 未配置白名单，视为未启用
+    end
+    
+    local success, response = pcall(function()
+        return game:HttpGet(CONFIG.WHITELIST_URL)
+    end)
+    
+    if not success or not response or response == "" then
+        warn("[猫咪Hub] 白名单获取失败")
+        return false
+    end
+    
+    whitelist = {}
+    local count = 0
+    for line in string.gmatch(response, "[^\r\n]+") do
+        local id = line:gsub("^%s+", ""):gsub("%s+$", "")
+        if id ~= "" then
+            whitelist[id] = true
+            count = count + 1
+        end
+    end
+    
+    print("[猫咪Hub] 白名单加载成功，共 " .. count .. " 个玩家")
     return count > 0
 end
 
@@ -142,7 +173,6 @@ end
 -- 4. 验证函数（含绑定检查）
 -- ============================================================
 local function verifyKey(input)
-    -- 先检查是否在有效卡密列表中
     local isValid = false
     for _, validKey in ipairs(validKeys) do
         if input == validKey then
@@ -155,7 +185,6 @@ local function verifyKey(input)
         return false, "卡密无效"
     end
     
-    -- 检查是否已被其他玩家绑定
     local boundPlayer = bindings[input]
     if boundPlayer then
         if boundPlayer == currentPlayerId then
@@ -165,7 +194,6 @@ local function verifyKey(input)
         end
     end
     
-    -- 未被绑定，绑定当前玩家
     bindings[input] = currentPlayerId
     local saved = saveBindings()
     if saved then
@@ -301,7 +329,7 @@ local function createAuthUI()
     icon.Size = UDim2.new(0, 40, 0, 40)
     icon.Position = UDim2.new(0, 15, 0.5, -20)
     icon.BackgroundTransparency = 1
-    icon.Text = "🔐"
+    icon.Text = ""
     icon.TextSize = 30
     icon.Font = Enum.Font.GothamBold
     icon.Parent = titleBar
@@ -321,7 +349,7 @@ local function createAuthUI()
     subtitle.Size = UDim2.new(1, -70, 0, 20)
     subtitle.Position = UDim2.new(0, 65, 1, -24)
     subtitle.BackgroundTransparency = 1
-    subtitle.Text = "卡密验证系统 | 绑定后不建议更换"
+    subtitle.Text = "一人一码 | 绑定后不可更换"
     subtitle.TextColor3 = Color3.fromRGB(150, 180, 255)
     subtitle.TextSize = 13
     subtitle.Font = Enum.Font.Gotham
@@ -476,7 +504,7 @@ local function createAuthUI()
     exitBtn.Size = UDim2.new(0, 100, 0, 35)
     exitBtn.Position = UDim2.new(1, -110, 1, -50)
     exitBtn.BackgroundTransparency = 1
-    exitBtn.Text = "❎️ 退出"
+    exitBtn.Text = "✕ 退出"
     exitBtn.TextColor3 = Color3.fromRGB(180, 180, 200)
     exitBtn.TextSize = 14
     exitBtn.Font = Enum.Font.Gotham
@@ -503,7 +531,7 @@ local function createAuthUI()
     versionLabel.Size = UDim2.new(1, 0, 0, 20)
     versionLabel.Position = UDim2.new(0, 0, 1, -25)
     versionLabel.BackgroundTransparency = 1
-    versionLabel.Text = "密钥验证系统 v2.0 | 小猫猫"
+    versionLabel.Text = "一人一码 v2.0 | 小猫猫"
     versionLabel.TextColor3 = Color3.fromRGB(100, 100, 130)
     versionLabel.TextSize = 11
     versionLabel.Font = Enum.Font.Gotham
@@ -531,16 +559,32 @@ local function createAuthUI()
 end
 
 -- ============================================================
--- 7. 启动
+-- 7. 启动（新增白名单检查）
 -- ============================================================
-createAuthUI()
+local function start()
+    -- 先尝试加载白名单
+    local whitelistLoaded = loadWhitelist()
+    
+    -- 如果在白名单中，直接加载Hub，跳过验证UI
+    if whitelistLoaded and whitelist[currentPlayerId] then
+        print("[猫咪Hub] 玩家 " .. currentPlayerId .. " 在白名单中，跳过验证")
+        loadMainHub()
+        return
+    end
+    
+    -- 否则进入卡密验证流程
+    print("[猫咪Hub] 不在白名单或白名单未启用，进入验证")
+    createAuthUI()
+end
+
+start()
 
 print("==========================================")
-print("🐱猫咪 Hub V6 密钥验证系统")
+print("猫咪 Hub V6 一人一码验证系统")
 print("✅ 卡密存储: GitHub")
 print("✅ 绑定存储: jsonbin.io")
+print("✅ 白名单: " .. (CONFIG.WHITELIST_URL or "未配置"))
 print("✅ UI: 固定不可移动")
 print("==========================================")
 print("当前玩家ID: " .. currentPlayerId)
-print("卡密列表: " .. CONFIG.REMOTE_KEYS_URL)
 print("==========================================")
