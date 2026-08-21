@@ -12695,7 +12695,7 @@ end
 OrionLib:MakeNotification({Name="提示", Content="AK47加载成功！", Time=3})
     end
 })
-InfoTab:AddButton({
+ScriptHubTab:AddButton({
 	Name = "撞击碎裂（吃性能）",
 	Callback = function()  
                       loadstring(game:HttpGet("https://raw.githubusercontent.com/xiaomaomi95/Scripts/refs/heads/main/Impact%20shatter%20script"))()
