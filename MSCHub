@@ -8,13 +8,13 @@ local content, isReady = Players:GetUserThumbnailAsync(userId, thumbType, thumbS
 
 StarterGui:SetCore("SendNotification", {
     Title = "音频播放组件启动中！",
-    Text = "🤑",
+    Text = "😍",
     Icon = content,
     Duration = 1
 })
 
     
-task.wait(1)    
+task.wait(2)    
    
 local Players = game:GetService("Players")
 local RunService = game:GetService("UserInputService")
@@ -482,7 +482,7 @@ local UtilityTab = Window:MakeTab({
 })
 UtilityTab:AddSection({ Name = "玩家信息" })
 UtilityTab:AddLabel("当前玩家：" .. LocalPlayer.Name)
-UtilityTab:AddLabel("您的注入器:"," "..identifyexecutor().."")
+UtilityTab:AddLabel("您的注入器:Delta"," "..identifyexecutor().."")
 UtilityTab:AddSection({ Name = "版本详情" })
 UtilityTab:AddLabel("版本：V1.8")
 UtilityTab:AddLabel("免费脚本，禁止倒卖！")
@@ -520,9 +520,9 @@ local PresetMusicList = {
     {name = "乌鲁鲁狂怒", url = "https://github.com/xiaomaomi95/music/raw/refs/heads/main/WULULU.mp3", filename = "WULULU.mp3"},
     {name = "忘不掉的你", url = "https://github.com/xiaomaomi95/music/raw/refs/heads/main/WANGBUDIAODENI.mp3", filename = "WANGBUDIAODENI.mp3"},
     {name = "Merry Christmas, Mr. Laurence",    url = "https://github.com/xiaomaomi95/music/raw/refs/heads/main/Christmas.mp3",    filename = "Christmas.mp3"},
-    {name = "示例音乐7",    url = "https://example.com/music7.mp3",    filename = "preset7.mp3"},
-    {name = "示例音乐8",    url = "https://example.com/music8.mp3",    filename = "preset8.mp3"},
-    {name = "示例音乐9",    url = "https://example.com/music9.mp3",    filename = "preset9.mp3"},
+    {name = "The fact that you left",    url = "https://github.com/xiaomaomi95/music/raw/refs/heads/main/THEFACTTHATYOULEFT.mp3",    filename = "THEFACTTHATYOULEFT.mp3"},
+    {name = "A Thousand Years",    url = "https://github.com/xiaomaomi95/music/raw/refs/heads/main/ATHOUSANDYEARS.mp3",    filename = "ATHOUSANDYEARS.mp3"},
+    {name = "Time machine",    url = "https://github.com/xiaomaomi95/music/raw/refs/heads/main/TIMEMACHINE.mp3",    filename = "TIMEMACHINE.mp3"},
     {name = "示例音乐10",   url = "https://example.com/music10.mp3",   filename = "preset10.mp3"},
     {name = "示例音乐11",   url = "https://example.com/music11.mp3",   filename = "preset11.mp3"},
     {name = "示例音乐12",   url = "https://example.com/music12.mp3",   filename = "preset12.mp3"},
