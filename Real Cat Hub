@@ -8,13 +8,13 @@ local content, isReady = Players:GetUserThumbnailAsync(userId, thumbType, thumbS
 
 StarterGui:SetCore("SendNotification", {
     Title = "猫咪Hub 启动中！",
-    Text = "已解锁完整版权限！",
+    Text = "🤩",
     Icon = content,
     Duration = 1
 })
 
     
-task.wait(2)    
+task.wait(1)    
    
 local Players = game:GetService("Players")
 local RunService = game:GetService("UserInputService")
@@ -1251,6 +1251,211 @@ UtilityTab:AddButton({
     end
 })
 -- ====================================================================
+--================聊天功能=================
+local UtilityTab = Window:MakeTab({
+	Name = "聊天功能",
+	Icon = "rbxassetid://4483362458",
+	PremiumOnly = false
+})
+UtilityTab:AddSection({ Name = "聊天框开关与说话功能（在删除聊天的服务器无法使用）" })
+UtilityTab:AddToggle({
+    Name = "聊天框开关",
+    Default = true, -- 修改这里，脚本加载默认为开启状态
+    Callback = function(state)
+        local StarterGui = game:GetService("StarterGui")
+        _G.ChatToggleRunning = false
+        task.wait(0.2)
+        _G.ChatToggleRunning = true
+
+        task.spawn(function()
+            for i=1,15 do
+                if not _G.ChatToggleRunning then break end
+                pcall(function()
+                    StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Chat, state)
+                end)
+                task.wait(0.2)
+            end
+        end)
+
+        if state then
+            OrionLib:MakeNotification({Name="聊天框",Content="已开启",Time=2})
+        else
+            OrionLib:MakeNotification({Name="聊天框",Content="已关闭",Time=2})
+        end
+    end
+})
+
+-- 脚本刚加载立刻执行一次开启逻辑，同步UI默认true的实际游戏状态
+task.spawn(function()
+    local StarterGui = game:GetService("StarterGui")
+    for i=1,15 do
+        pcall(function()
+            StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Chat, true)
+        end)
+        task.wait(0.2)
+    end
+end)
+UtilityTab:AddTextbox({
+        Name = "发送公屏聊天",
+        Default = "",
+        TextDisappear = true, --改为true，提交后自动清空输入框
+        Callback = function(inputStr)
+            local sendText = inputStr
+            if sendText == "" then return end
+            pcall(function()
+                game:GetService("TextChatService").TextChannels.RBXGeneral:SendAsync(sendText)
+            end)
+        end
+    })
+local UtilityTab = Window:MakeTab({
+	Name = "视角类功能",
+	Icon = "rbxassetid://4483362458",
+	PremiumOnly = false
+})
+UtilityTab:AddSlider({
+    Name = "视野FOV",
+    Min = -5,
+    Max = 120,
+    Default = 70,
+    Color = Theme.SliderColor,
+    Increment = 1,
+    ValueName = "degrees",
+    Callback = function(v)
+        local cam = workspace.CurrentCamera
+        if cam then
+            cam.FieldOfView = v
+        end
+    end
+})
+UtilityTab:AddButton({
+    Name = "重置视野FOV",
+    Callback = function()
+        local cam = workspace.CurrentCamera
+        if cam then
+            cam.FieldOfView = 70
+        end
+    end
+})
+UtilityTab:AddSection({ Name = "锁定视角功能" })
+UtilityTab:AddToggle({
+    Name = "生成锁定视角按钮",
+    Default = false,
+    Callback = function(state)
+        if not rawget(_G, "ShiftLockRenderConn") then _G.ShiftLockRenderConn = nil end
+        if not rawget(_G, "ShiftLockUIGui") then _G.ShiftLockUIGui = nil end
+
+        --====关闭逻辑====
+        if not state then
+            if _G.ShiftLockRenderConn then
+                pcall(function() _G.ShiftLockRenderConn:Disconnect() end)
+                _G.ShiftLockRenderConn = nil
+            end
+            if _G.ShiftLockUIGui then
+                pcall(function() _G.ShiftLockUIGui:Destroy() end)
+                _G.ShiftLockUIGui = nil
+            end
+            local LocalPlayer = game:GetService("Players").LocalPlayer
+            local char = LocalPlayer.Character
+            if char and char:FindFirstChild("Humanoid") then
+                char.Humanoid.AutoRotate = true
+            end
+            local cam = workspace.CurrentCamera
+            cam.CFrame = cam.CFrame * CFrame.new(-1.7,0,0)
+            OrionLib:MakeNotification({Name="锁定视角",Content="已关闭，全部功能UI销毁",Time=2})
+            return
+        end
+
+        --====开启逻辑====
+        local CoreGui = game:GetService("CoreGui")
+        local Players = game:GetService("Players")
+        local RunService = game:GetService("RunService")
+        local Player = Players.LocalPlayer
+
+        local oldCheck = CoreGui:FindFirstChild("Shiftlock (CoreGui)")
+        if oldCheck then oldCheck:Destroy() end
+
+        local ShiftLockScreenGui = Instance.new("ScreenGui")
+        local ShiftLockButton = Instance.new("ImageButton")
+        local ShiftlockCursor = Instance.new("ImageLabel")
+
+        local States = {
+            Off = "rbxasset://textures/ui/mouseLock_off@2x.png",
+            On = "rbxasset://textures/ui/mouseLock_on@2x.png",
+            Lock = "rbxasset://textures/MouseLockedCursor.png",
+            Lock2 = "rbxasset://SystemCursors/Cross"
+        }
+        local MaxLength = 900000
+        local EnabledOffset = CFrame.new(1.7, 0, 0)
+        local DisabledOffset = CFrame.new(-1.7, 0, 0)
+        local Active
+
+        ShiftLockScreenGui.Name = "Shiftlock (CoreGui)"
+        ShiftLockScreenGui.Parent = CoreGui
+        ShiftLockScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        ShiftLockScreenGui.ResetOnSpawn = false
+
+        ShiftLockButton.Parent = ShiftLockScreenGui
+        ShiftLockButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        ShiftLockButton.BackgroundTransparency = 1.000
+        ShiftLockButton.Position = UDim2.new(0.7, 0, 0.75, 0)
+        ShiftLockButton.Size = UDim2.new(0.0636147112, 0, 0.0661305636, 0)
+        ShiftLockButton.SizeConstraint = Enum.SizeConstraint.RelativeXX
+        ShiftLockButton.Image = States.Off
+
+        ShiftlockCursor.Name = "Shiftlock Cursor" --修复之前笔误 Shiftlock → ShiftlockCursor
+        ShiftlockCursor.Parent = ShiftLockScreenGui
+        ShiftlockCursor.Image = States.Lock
+        ShiftlockCursor.Size = UDim2.new(0.03, 0, 0.03, 0)
+        ShiftlockCursor.Position = UDim2.new(0.5, 0, 0.5, 0)
+        ShiftlockCursor.AnchorPoint = Vector2.new(0.5, 0.5)
+        ShiftlockCursor.SizeConstraint = Enum.SizeConstraint.RelativeXX
+        ShiftlockCursor.BackgroundTransparency = 1
+        ShiftlockCursor.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+        ShiftlockCursor.Visible = false
+
+        ShiftLockButton.MouseButton1Click:Connect(function()
+            local char = Player.Character
+            if not char or not char:FindFirstChild("Humanoid") or not char:FindFirstChild("HumanoidRootPart") then return end
+            if not Active then
+                Active = RunService.RenderStepped:Connect(function()
+                    local c = Player.Character
+                    if not c or not c:FindFirstChild("HumanoidRootPart") then return end
+                    c.Humanoid.AutoRotate = false
+                    ShiftLockButton.Image = States.On
+                    ShiftlockCursor.Visible = true
+                    c.HumanoidRootPart.CFrame = CFrame.new(
+                        c.HumanoidRootPart.Position,
+                        Vector3.new(
+                            workspace.CurrentCamera.CFrame.LookVector.X * MaxLength,
+                            c.HumanoidRootPart.Position.Y,
+                            workspace.CurrentCamera.CFrame.LookVector.Z * MaxLength
+                        )
+                    )
+                    workspace.CurrentCamera.CFrame = workspace.CurrentCamera.CFrame * EnabledOffset
+                    workspace.CurrentCamera.Focus = CFrame.fromMatrix(
+                        workspace.CurrentCamera.CFrame.Focus.Position,
+                        workspace.CurrentCamera.CFrame.RightVector,
+                        workspace.CurrentCamera.CFrame.UpVector
+                    ) * EnabledOffset
+                end)
+                _G.ShiftLockRenderConn = Active
+            else
+                char.Humanoid.AutoRotate = true
+                ShiftLockButton.Image = States.Off
+                workspace.CurrentCamera.CFrame = workspace.CurrentCamera.CFrame * DisabledOffset
+                ShiftlockCursor.Visible = false
+                pcall(function()
+                    Active:Disconnect()
+                    Active = nil
+                    _G.ShiftLockRenderConn = nil
+                end)
+            end
+        end)
+
+        _G.ShiftLockUIGui = ShiftLockScreenGui
+        OrionLib:MakeNotification({Name="锁定视角",Content="锁定视角按钮已生成",Time=2})
+    end
+})
 UtilityTab:AddButton({
 	Name = "解锁第三人称和无限缩放距离",
 	Callback = function()
@@ -1339,62 +1544,6 @@ StarterGui:SetCore("SendNotification", {
 OrionLib:MakeNotification({Name="提示", Content="脚本加载成功！", Time=3})
 	end
 })
---================聊天功能=================
-local UtilityTab = Window:MakeTab({
-	Name = "聊天功能",
-	Icon = "rbxassetid://4483362458",
-	PremiumOnly = false
-})
-UtilityTab:AddSection({ Name = "聊天框开关与说话功能（在删除聊天的服务器无法使用）" })
-UtilityTab:AddToggle({
-    Name = "聊天框开关",
-    Default = true, -- 修改这里，脚本加载默认为开启状态
-    Callback = function(state)
-        local StarterGui = game:GetService("StarterGui")
-        _G.ChatToggleRunning = false
-        task.wait(0.2)
-        _G.ChatToggleRunning = true
-
-        task.spawn(function()
-            for i=1,15 do
-                if not _G.ChatToggleRunning then break end
-                pcall(function()
-                    StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Chat, state)
-                end)
-                task.wait(0.2)
-            end
-        end)
-
-        if state then
-            OrionLib:MakeNotification({Name="聊天框",Content="已开启",Time=2})
-        else
-            OrionLib:MakeNotification({Name="聊天框",Content="已关闭",Time=2})
-        end
-    end
-})
-
--- 脚本刚加载立刻执行一次开启逻辑，同步UI默认true的实际游戏状态
-task.spawn(function()
-    local StarterGui = game:GetService("StarterGui")
-    for i=1,15 do
-        pcall(function()
-            StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Chat, true)
-        end)
-        task.wait(0.2)
-    end
-end)
-UtilityTab:AddTextbox({
-        Name = "发送公屏聊天",
-        Default = "",
-        TextDisappear = true, --改为true，提交后自动清空输入框
-        Callback = function(inputStr)
-            local sendText = inputStr
-            if sendText == "" then return end
-            pcall(function()
-                game:GetService("TextChatService").TextChannels.RBXGeneral:SendAsync(sendText)
-            end)
-        end
-    })
 -- 服务器功能分区
 local UtilityTab = Window:MakeTab({
     Name = "服务器功能",
@@ -1423,6 +1572,31 @@ UtilityTab:AddButton({
     end
 })
 
+-- ==================== 反挂机 ====================
+UtilityTab:AddSection({ Name = "反挂机" })
+UtilityTab:AddToggle({
+    Name = "开启反挂机",
+    Default = false,
+    Callback = function(state)
+        if state then
+            -- 启动反挂机：监听闲置事件并模拟鼠标操作
+            local vu = game:GetService("VirtualUser")
+            _G.AntiAFKConn = game:GetService("Players").LocalPlayer.Idled:connect(function()
+                vu:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+                wait(1)
+                vu:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+            end)
+            OrionLib:MakeNotification({Name="反挂机", Content="已开启，不会再被踢出", Time=2})
+        else
+            -- 关闭反挂机，断开连接
+            if _G.AntiAFKConn then
+                _G.AntiAFKConn:Disconnect()
+                _G.AntiAFKConn = nil
+            end
+            OrionLib:MakeNotification({Name="反挂机", Content="已关闭", Time=2})
+        end
+    end
+})
 -- ==================== 图形优化（全部可逆开关） ====================
 UtilityTab:AddSection({ Name = "图形优化类" })
 
@@ -2305,155 +2479,6 @@ UtilityTab:AddSlider({
     ValueName = "Smoothness",
     Callback = function(v)
         _G.AimbotSmoothness = v
-    end
-})
-local UtilityTab = Window:MakeTab({
-	Name = "视角类功能",
-	Icon = "rbxassetid://4483362458",
-	PremiumOnly = false
-})
-UtilityTab:AddSlider({
-    Name = "视野FOV",
-    Min = -5,
-    Max = 120,
-    Default = 70,
-    Color = Theme.SliderColor,
-    Increment = 1,
-    ValueName = "degrees",
-    Callback = function(v)
-        local cam = workspace.CurrentCamera
-        if cam then
-            cam.FieldOfView = v
-        end
-    end
-})
-UtilityTab:AddButton({
-    Name = "重置视野FOV",
-    Callback = function()
-        local cam = workspace.CurrentCamera
-        if cam then
-            cam.FieldOfView = 70
-        end
-    end
-})
-UtilityTab:AddSection({ Name = "锁定视角功能" })
-UtilityTab:AddToggle({
-    Name = "生成锁定视角按钮",
-    Default = false,
-    Callback = function(state)
-        if not rawget(_G, "ShiftLockRenderConn") then _G.ShiftLockRenderConn = nil end
-        if not rawget(_G, "ShiftLockUIGui") then _G.ShiftLockUIGui = nil end
-
-        --====关闭逻辑====
-        if not state then
-            if _G.ShiftLockRenderConn then
-                pcall(function() _G.ShiftLockRenderConn:Disconnect() end)
-                _G.ShiftLockRenderConn = nil
-            end
-            if _G.ShiftLockUIGui then
-                pcall(function() _G.ShiftLockUIGui:Destroy() end)
-                _G.ShiftLockUIGui = nil
-            end
-            local LocalPlayer = game:GetService("Players").LocalPlayer
-            local char = LocalPlayer.Character
-            if char and char:FindFirstChild("Humanoid") then
-                char.Humanoid.AutoRotate = true
-            end
-            local cam = workspace.CurrentCamera
-            cam.CFrame = cam.CFrame * CFrame.new(-1.7,0,0)
-            OrionLib:MakeNotification({Name="锁定视角",Content="已关闭，全部功能UI销毁",Time=2})
-            return
-        end
-
-        --====开启逻辑====
-        local CoreGui = game:GetService("CoreGui")
-        local Players = game:GetService("Players")
-        local RunService = game:GetService("RunService")
-        local Player = Players.LocalPlayer
-
-        local oldCheck = CoreGui:FindFirstChild("Shiftlock (CoreGui)")
-        if oldCheck then oldCheck:Destroy() end
-
-        local ShiftLockScreenGui = Instance.new("ScreenGui")
-        local ShiftLockButton = Instance.new("ImageButton")
-        local ShiftlockCursor = Instance.new("ImageLabel")
-
-        local States = {
-            Off = "rbxasset://textures/ui/mouseLock_off@2x.png",
-            On = "rbxasset://textures/ui/mouseLock_on@2x.png",
-            Lock = "rbxasset://textures/MouseLockedCursor.png",
-            Lock2 = "rbxasset://SystemCursors/Cross"
-        }
-        local MaxLength = 900000
-        local EnabledOffset = CFrame.new(1.7, 0, 0)
-        local DisabledOffset = CFrame.new(-1.7, 0, 0)
-        local Active
-
-        ShiftLockScreenGui.Name = "Shiftlock (CoreGui)"
-        ShiftLockScreenGui.Parent = CoreGui
-        ShiftLockScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-        ShiftLockScreenGui.ResetOnSpawn = false
-
-        ShiftLockButton.Parent = ShiftLockScreenGui
-        ShiftLockButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-        ShiftLockButton.BackgroundTransparency = 1.000
-        ShiftLockButton.Position = UDim2.new(0.7, 0, 0.75, 0)
-        ShiftLockButton.Size = UDim2.new(0.0636147112, 0, 0.0661305636, 0)
-        ShiftLockButton.SizeConstraint = Enum.SizeConstraint.RelativeXX
-        ShiftLockButton.Image = States.Off
-
-        ShiftlockCursor.Name = "Shiftlock Cursor" --修复之前笔误 Shiftlock → ShiftlockCursor
-        ShiftlockCursor.Parent = ShiftLockScreenGui
-        ShiftlockCursor.Image = States.Lock
-        ShiftlockCursor.Size = UDim2.new(0.03, 0, 0.03, 0)
-        ShiftlockCursor.Position = UDim2.new(0.5, 0, 0.5, 0)
-        ShiftlockCursor.AnchorPoint = Vector2.new(0.5, 0.5)
-        ShiftlockCursor.SizeConstraint = Enum.SizeConstraint.RelativeXX
-        ShiftlockCursor.BackgroundTransparency = 1
-        ShiftlockCursor.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-        ShiftlockCursor.Visible = false
-
-        ShiftLockButton.MouseButton1Click:Connect(function()
-            local char = Player.Character
-            if not char or not char:FindFirstChild("Humanoid") or not char:FindFirstChild("HumanoidRootPart") then return end
-            if not Active then
-                Active = RunService.RenderStepped:Connect(function()
-                    local c = Player.Character
-                    if not c or not c:FindFirstChild("HumanoidRootPart") then return end
-                    c.Humanoid.AutoRotate = false
-                    ShiftLockButton.Image = States.On
-                    ShiftlockCursor.Visible = true
-                    c.HumanoidRootPart.CFrame = CFrame.new(
-                        c.HumanoidRootPart.Position,
-                        Vector3.new(
-                            workspace.CurrentCamera.CFrame.LookVector.X * MaxLength,
-                            c.HumanoidRootPart.Position.Y,
-                            workspace.CurrentCamera.CFrame.LookVector.Z * MaxLength
-                        )
-                    )
-                    workspace.CurrentCamera.CFrame = workspace.CurrentCamera.CFrame * EnabledOffset
-                    workspace.CurrentCamera.Focus = CFrame.fromMatrix(
-                        workspace.CurrentCamera.CFrame.Focus.Position,
-                        workspace.CurrentCamera.CFrame.RightVector,
-                        workspace.CurrentCamera.CFrame.UpVector
-                    ) * EnabledOffset
-                end)
-                _G.ShiftLockRenderConn = Active
-            else
-                char.Humanoid.AutoRotate = true
-                ShiftLockButton.Image = States.Off
-                workspace.CurrentCamera.CFrame = workspace.CurrentCamera.CFrame * DisabledOffset
-                ShiftlockCursor.Visible = false
-                pcall(function()
-                    Active:Disconnect()
-                    Active = nil
-                    _G.ShiftLockRenderConn = nil
-                end)
-            end
-        end)
-
-        _G.ShiftLockUIGui = ShiftLockScreenGui
-        OrionLib:MakeNotification({Name="锁定视角",Content="锁定视角按钮已生成",Time=2})
     end
 })
 local UtilityTab = Window:MakeTab({
