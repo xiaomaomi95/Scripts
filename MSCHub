@@ -1,0 +1,823 @@
+local Players = game:GetService("Players")
+local StarterGui = game:GetService("StarterGui")
+
+local userId = Players:GetUserIdFromNameAsync("w76543ee")
+local thumbType = Enum.ThumbnailType.HeadShot
+local thumbSize = Enum.ThumbnailSize.Size420x420
+local content, isReady = Players:GetUserThumbnailAsync(userId, thumbType, thumbSize)
+
+StarterGui:SetCore("SendNotification", {
+    Title = "音频播放组件启动中！",
+    Text = "🤑",
+    Icon = content,
+    Duration = 1
+})
+
+    
+task.wait(1)    
+   
+local Players = game:GetService("Players")
+local RunService = game:GetService("UserInputService")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+-- ====================================================================
+-- ====================================================================
+local function applyPinkGradientEffect()
+	local CoreGui = game:GetService("CoreGui")
+	local Players = game:GetService("Players")
+
+	local time = 0
+	local strokes = {}
+
+	-- Register UIStroke
+	local function register(obj)
+		if obj:IsA("UIStroke") then
+			table.insert(strokes, obj)
+		end
+	end
+
+	-- Monitor both CoreGui + PlayerGui
+	local function scan(gui)
+		for _, v in ipairs(gui:GetDescendants()) do
+			register(v)
+		end
+		gui.DescendantAdded:Connect(register)
+	end
+
+	-- Wait for PlayerGui
+	local player = Players.LocalPlayer
+	if player then
+		local playerGui = player:WaitForChild("PlayerGui")
+		scan(CoreGui)
+		scan(playerGui)
+	end
+
+	-- 蓝色渐变颜色生成函数（浅蓝→天蓝→深海蓝）
+	local function getPinkGradientColor(t)
+		local blueColors = {
+			Color3.fromRGB(173, 216, 230), -- 浅天蓝
+			Color3.fromRGB(100, 149, 237), -- 矢车菊亮蓝
+			Color3.fromRGB(0, 51, 102)     -- 深海深蓝
+		}
+		local position = (math.sin(t * 2) + 1) / 2
+		if position < 0.5 then
+			local alpha = position * 2
+			return blueColors[1]:Lerp(blueColors[2], alpha)
+		else
+			local alpha = (position - 0.5) * 2
+			return blueColors[2]:Lerp(blueColors[3], alpha)
+		end
+	end
+
+	-- 渲染循环，调快流动速度0.8倍
+	RunService.RenderStepped:Connect(function(dt)
+		time = time + dt * 0.8
+		for i = #strokes, 1, -1 do
+			local stroke = strokes[i]
+			if stroke and stroke.Parent then
+				local phaseOffset = i * 0.01
+				local t = time + phaseOffset
+				stroke.Color = getPinkGradientColor(t)
+			else
+				table.remove(strokes, i)
+			end
+		end
+	end)
+end
+-- 启动蓝色流光效果
+pcall(applyPinkGradientEffect)
+-- ====================================================================
+-- Orion UI Library Load
+-- ====================================================================
+-- 前置 UI：选择 UI 颜色主题（带升起动画）
+-- ============================================
+local Players = game:GetService("Players")
+local CoreGui = game:GetService("CoreGui")
+local TweenService = game:GetService("TweenService")
+local LocalPlayer = Players.LocalPlayer
+local selectedTheme = nil
+
+-- 预设主题（顺序：黑色、白色、亮蓝、暖阳橙）
+local themes = {
+    ["黑色"] = {
+        Main = Color3.fromRGB(25, 25, 25),
+        Second = Color3.fromRGB(45, 45, 45),
+        Stroke = Color3.fromRGB(100, 100, 100),
+        Divider = Color3.fromRGB(60, 60, 60),
+        Text = Color3.fromRGB(240, 240, 240),
+        TextDark = Color3.fromRGB(150, 150, 150),
+    },
+    ["白色"] = {
+        Main = Color3.fromRGB(240, 240, 240),
+        Second = Color3.fromRGB(220, 220, 220),
+        Stroke = Color3.fromRGB(180, 180, 180),
+        Divider = Color3.fromRGB(200, 200, 200),
+        Text = Color3.fromRGB(30, 30, 30),
+        TextDark = Color3.fromRGB(100, 100, 100),
+    },
+    ["蓝色"] = {
+        Main = Color3.fromRGB(10, 30, 60),
+        Second = Color3.fromRGB(30, 60, 120),
+        Stroke = Color3.fromRGB(0, 150, 255),      -- 亮蓝色
+        Divider = Color3.fromRGB(50, 80, 150),
+        Text = Color3.fromRGB(255, 255, 255),
+        TextDark = Color3.fromRGB(180, 210, 255),
+    },
+    ["橙色"] = {
+        Main = Color3.fromRGB(50, 30, 20),
+        Second = Color3.fromRGB(80, 50, 30),
+        Stroke = Color3.fromRGB(255, 165, 0),
+        Divider = Color3.fromRGB(120, 80, 50),
+        Text = Color3.fromRGB(255, 255, 255),
+        TextDark = Color3.fromRGB(200, 180, 160),
+    },
+}
+
+-- 创建选择 UI
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "ThemeSelector"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = CoreGui
+
+-- 半透明遮罩（淡入）
+local overlay = Instance.new("Frame")
+overlay.Size = UDim2.new(1, 0, 1, 0)
+overlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+overlay.BackgroundTransparency = 1
+overlay.Parent = screenGui
+
+-- 主窗口（初始在屏幕底部外，准备升起）
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 420, 0, 300)
+mainFrame.Position = UDim2.new(0.5, -210, 1.1, 0)  -- 在屏幕下方
+mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
+mainFrame.BorderSizePixel = 0
+mainFrame.BackgroundTransparency = 1
+mainFrame.Parent = screenGui
+Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 14)
+
+-- 边框发光效果
+local stroke = Instance.new("UIStroke")
+stroke.Color = Color3.fromRGB(80, 120, 255)
+stroke.Thickness = 2
+stroke.Transparency = 0.5
+stroke.Parent = mainFrame
+
+-- 标题
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 55)
+title.Position = UDim2.new(0, 0, 0, 10)
+title.Text = "🎨 选择 UI 主题"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.TextSize = 26
+title.Font = Enum.Font.GothamBold
+title.BackgroundTransparency = 1
+title.Parent = mainFrame
+
+-- 副标题
+local subtitle = Instance.new("TextLabel")
+subtitle.Size = UDim2.new(1, 0, 0, 20)
+subtitle.Position = UDim2.new(0, 0, 0, 40)
+subtitle.Text = "请选择您喜欢的颜色方案"
+subtitle.TextColor3 = Color3.fromRGB(180, 180, 210)
+subtitle.TextSize = 13
+subtitle.Font = Enum.Font.Gotham
+subtitle.BackgroundTransparency = 1
+subtitle.TextXAlignment = Enum.TextXAlignment.Center
+subtitle.Parent = mainFrame
+
+-- 按钮布局（4个按钮，2列）
+local buttonNames = {"黑色", "白色", "蓝色", "橙色"}
+local btnWidth = 175
+local btnHeight = 50
+local btnSpacing = 12
+local startX = (420 - btnWidth * 2 - btnSpacing) / 2
+local startY = 80
+
+-- 每个按钮的颜色预览小方块
+local buttonColors = {
+    ["黑色"] = Color3.fromRGB(25, 25, 25),
+    ["白色"] = Color3.fromRGB(240, 240, 240),
+    ["蓝色"] = Color3.fromRGB(0, 150, 255),
+    ["橙色"] = Color3.fromRGB(255, 165, 0),
+}
+
+for i, name in ipairs(buttonNames) do
+    local row = math.floor((i - 1) / 2)
+    local col = (i - 1) % 2
+    local x = startX + col * (btnWidth + btnSpacing)
+    local y = startY + row * (btnHeight + btnSpacing)
+
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, btnWidth, 0, btnHeight)
+    btn.Position = UDim2.new(0, x, 0, y)
+    btn.Text = name
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextSize = 17
+    btn.Font = Enum.Font.GothamBold
+    btn.BackgroundColor3 = Color3.fromRGB(55, 55, 85)
+    btn.BorderSizePixel = 0
+    btn.Parent = mainFrame
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+
+    -- 颜色预览小方块（在按钮左侧）
+    local preview = Instance.new("Frame")
+    preview.Size = UDim2.new(0, 18, 0, 18)
+    preview.Position = UDim2.new(0, 12, 0.5, -9)
+    preview.BackgroundColor3 = buttonColors[name]
+    preview.BorderSizePixel = 0
+    preview.Parent = btn
+    Instance.new("UICorner", preview).CornerRadius = UDim.new(0, 4)
+
+    -- 调整文字位置
+    btn.TextXAlignment = Enum.TextXAlignment.Center
+
+    btn.MouseEnter:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(75, 75, 110)}):Play()
+    end)
+    btn.MouseLeave:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(55, 55, 85)}):Play()
+    end)
+
+    btn.MouseButton1Click:Connect(function()
+        selectedTheme = name
+        -- 退出动画：向下滑出
+        TweenService:Create(mainFrame, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+            Position = UDim2.new(0.5, -210, 1.2, 0),
+            BackgroundTransparency = 1
+        }):Play()
+        TweenService:Create(overlay, TweenInfo.new(0.4), {BackgroundTransparency = 1}):Play()
+        task.wait(0.45)
+        screenGui:Destroy()
+    end)
+end
+
+-- 版本信息
+local versionLabel = Instance.new("TextLabel")
+versionLabel.Size = UDim2.new(1, 0, 0, 20)
+versionLabel.Position = UDim2.new(0, 0, 1, -22)
+versionLabel.BackgroundTransparency = 1
+versionLabel.Text = "猫咪Hub V6 | 颜色主题选择界面"
+versionLabel.TextColor3 = Color3.fromRGB(120, 120, 160)
+versionLabel.TextSize = 11
+versionLabel.Font = Enum.Font.Gotham
+versionLabel.Parent = mainFrame
+
+-- === 播放升起动画 ===
+
+-- 1. 遮罩淡入
+TweenService:Create(overlay, TweenInfo.new(0.5, Enum.EasingStyle.Quad), {
+    BackgroundTransparency = 0.4
+}):Play()
+
+-- 2. 主窗口从底部升起 + 淡入（延迟一点）
+task.wait(0.05)
+TweenService:Create(mainFrame, TweenInfo.new(0.7, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+    Position = UDim2.new(0.5, -210, 0.5, -150),
+    BackgroundTransparency = 0
+}):Play()
+
+-- 等待用户选择
+repeat task.wait() until selectedTheme ~= nil
+
+-- ============================================
+-- 加载 CatLib
+-- ============================================
+local OrionLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/xiaomaomi95/Scripts/refs/heads/main/CatLib"))()
+
+-- ============================================
+-- 定义主题刷新函数
+-- ============================================
+function OrionLib:RefreshTheme()
+    if not self.ThemeObjects then return end
+    local theme = self.Themes[self.SelectedTheme]
+    if not theme then return end
+
+    local propMap = {
+        Main = "BackgroundColor3",
+        Second = "BackgroundColor3",
+        Stroke = "Color",
+        Divider = "BackgroundColor3",
+        Text = "TextColor3",
+        TextDark = "TextColor3",
+    }
+
+    for objType, objList in pairs(self.ThemeObjects) do
+        local prop = propMap[objType]
+        if prop and theme[objType] then
+            for _, obj in ipairs(objList) do
+                if obj and obj.Parent then
+                    pcall(function()
+                        obj[prop] = theme[objType]
+                    end)
+                end
+            end
+        end
+    end
+end
+
+-- ============================================
+-- 应用选择的主题
+-- ============================================
+local chosen = themes[selectedTheme]
+local default = OrionLib.Themes.Default
+
+default.Main = chosen.Main
+default.Second = chosen.Second
+default.Stroke = chosen.Stroke
+default.Divider = chosen.Divider
+default.Text = chosen.Text
+default.TextDark = chosen.TextDark
+
+OrionLib.SelectedTheme = "Default"
+OrionLib:RefreshTheme()
+
+-- ============================================
+-- 暴露 Theme 变量
+-- ============================================
+local Theme = {
+    BackgroundColor = chosen.Main,
+    SliderColor = chosen.Stroke,
+    TextColor = chosen.Text,
+    SectionColor = chosen.Second,
+}
+_G.Theme = Theme
+
+-- ============================================
+-- 通知用户
+-- ============================================
+game:GetService("StarterGui"):SetCore("SendNotification", {
+    Title = "✅ 主题已应用",
+    Text = "当前主题：" .. selectedTheme,
+    Duration = 1
+})
+-- ============================================
+-- ====================================================================
+-- Object ID Configuration（仅保留变量，环绕逻辑全部删除）
+-- ====================================================================
+local ObjectIDConfig = {
+	CurrentObjectID = "FireworkSparkler",
+	AvailableObjects = {
+		"FireworkSparkler", "PalletLightBrown", "GlassBoxGray", "MusicKeyboard",
+		"SpookyCandle1", "Tetracube1", "NinjaKatana", "YouDecoy", "BombMissile", 
+		"LadderLightBrown", "CreatureBlobman", "DiscoColorBall", "MineralCrystalPink",
+		"FloatingIsland", "FlyingToyUfo", "JukeboxBlue", "JukeboxOrange", "CouchBlue",
+		"CouchPink", "CouchWhite", "Boombox", "FireworkMissile", "Snowflake",
+		"SpookyCandle5", "MineralDiamond", "TractorGreen", "TractorOrange", "TractorRed"
+	}
+}
+-- ====================================================================
+-- Utility Configuration（删除TP、Noclip、ESP相关变量）
+-- ====================================================================
+local UtilityConfig = {
+	InfiniteJump = false,
+	FOV = 70, OriginalFOV = 70, MaxFOV = 180, MinFOV = -5,
+}
+local Camera = workspace.CurrentCamera
+-- ====================================================================
+-- Common Utility Functions（环绕相关函数全部移除）
+-- ====================================================================
+local function findObjects()
+	local toys = {}
+	for _, item in ipairs(workspace:GetDescendants()) do
+		if item:IsA("Model") and item.Name == ObjectIDConfig.CurrentObjectID then
+			local alreadyAdded = false
+			for _, existingToy in ipairs(toys) do
+				if existingToy == item then alreadyAdded = true; break end
+			end
+			if not alreadyAdded then table.insert(toys, item) end
+		end
+	end
+	table.sort(toys, function(a, b) return a.Name < b end)
+	return toys
+end
+local function getPrimaryPart(model)
+	if model.PrimaryPart then return model.PrimaryPart end
+	local potentialParts = {"Handle", "Main", "Part", "Base", "Sparkler", "Firework", "Blade", "Candle", "Keyboard", "Box", "Decoy", "Missile", "Ladder", "Blob", "Ball", "Crystal", "Island", "Ufo", "Jukebox", "Couch", "Boombox", "Snowflake", "Diamond", "Tractor"}
+	for _, partName in ipairs(potentialParts) do
+		local part = model:FindFirstChild(part)
+		if part and part:IsA("BasePart") then return part end
+	end
+	for _, child in ipairs(model:GetChildren()) do
+		if child:IsA("BasePart") then return child end
+	end
+	return nil
+end
+-- 环绕切换道具ID函数完整删除
+-- ====================================================================
+-- Physics Attachment Function（环绕依赖删除，保留但无调用）
+-- ====================================================================
+local function attachPhysics(part, pValue, dValue)
+	if not part then return nil, nil end
+	local existingBG = part:FindFirstChildOfClass("BodyGyro")
+	local existingBP = part:FindFirstChildOfClass("BodyPosition")
+	if existingBG and existingBP then return existingBG, existingBP end
+	if existingBG then existingBG:Destroy() end
+	if existingBP then existingBP:Destroy() end
+	local BP = Instance.new("BodyPosition")
+	local BG = Instance.new("BodyGyro")
+	BP.P = pValue or 15000
+	BP.D = dValue or 200
+	BP.MaxForce = Vector3.new(1, 1, 1) * 1e10
+	BP.Parent = part
+	BG.P = pValue or 15000
+	BG.D = dValue or 200
+	BG.MaxTorque = Vector3.new(1, 1, 1) * 1e10
+	BG.Parent = part
+	return BG, BP
+end
+-- ====================================================================
+-- Script Execution Utilities
+-- ====================================================================
+local function executeScript(url, scriptName)
+	local success, result = pcall(function()
+		return loadstring(game:HttpGet(url))()
+	end)
+	if success then
+		OrionLib:MakeNotification({
+			Name = scriptName,
+			Content = "加载完成！",
+			Time = 3
+		})
+	else
+		OrionLib:MakeNotification({
+			Name = scriptName,
+			Content = "加载失败：" .. tostring(result),
+			Time = 5
+		})
+	end
+end
+-- ====================================================================
+-- Link Copy Function
+-- ====================================================================
+local function copyToClipboard(text, name)
+	setclipboard(text)
+	OrionLib:MakeNotification({
+		Name = name,
+		Content = "已复制到剪贴板",
+		Time = 2
+	})
+end
+-- ====================================================================
+-- Orion UI Creation (Title Changed)
+-- ====================================================================
+local Window = OrionLib:MakeWindow({
+	Name = "🎶音乐播放V1.8",
+	HidePremium = false,
+	SaveConfig = false,
+	IntroEnabled = false,
+	ThemeColor = Theme.BackgroundColor,
+	BackgroundColor = Theme.BackgroundColor,
+	TextColor = Theme.TextColor
+})
+-- ====================================================================
+-- Utilities Tab
+-- ====================================================================
+-- 信息与支持
+-- ====================================================================
+local UtilityTab = Window:MakeTab({
+	Name = "信息栏",
+	Icon = "rbxassetid://4483362458",
+	PremiumOnly = false
+})
+UtilityTab:AddSection({ Name = "玩家信息" })
+UtilityTab:AddLabel("当前玩家：" .. LocalPlayer.Name)
+UtilityTab:AddLabel("您的注入器:"," "..identifyexecutor().."")
+UtilityTab:AddSection({ Name = "版本详情" })
+UtilityTab:AddLabel("版本：V1.8")
+UtilityTab:AddLabel("免费脚本，禁止倒卖！")
+UtilityTab:AddSection({ Name = "群聊链接" })
+-- ========== 音频功能 ======
+local UtilityTab = Window:MakeTab({
+    Name = "音频功能",
+    Icon = "rbxassetid://4483362458",
+    PremiumOnly = false
+})
+
+-- ========== 全局变量初始化 ==========
+if not AudioPlayerSound then
+    AudioPlayerSound = nil
+end
+if not DefaultAudioID then
+    DefaultAudioID = "142376088"
+end
+if not CurrentVolume then
+    CurrentVolume = 1
+end
+if not audioInputGui then
+    audioInputGui = nil
+end
+if not realTextBox then
+    realTextBox = nil
+end
+
+-- 预设音乐列表（你可以随意增删或修改链接）
+local PresetMusicList = {
+    {name = "星河追梦", url = "https://github.com/xiaomaomi95/music/raw/refs/heads/main/WEILONG.mp3", filename = "WEILONG.mp3"},
+    {name = "噬金玫瑰", url = "https://github.com/xiaomaomi95/music/raw/refs/heads/main/HONGLANG.mp3", filename = "HONGLANG.mp3"},
+    {name = "水墨云图", url = "https://github.com/xiaomaomi95/music/raw/refs/heads/main/MAIXIAOWEN.mp3", filename = "MAIXIAOWEN.mp3"},
+    {name = "维什戴尔", url = "https://github.com/xiaomaomi95/music/raw/refs/heads/main/MAIXIAOWENHONGZHANGLANG.mp3", filename = "MAIXIAOWENHONGZHANGLANG.mp3"},
+    {name = "乌鲁鲁狂怒", url = "https://github.com/xiaomaomi95/music/raw/refs/heads/main/WULULU.mp3", filename = "WULULU.mp3"},
+    {name = "忘不掉的你", url = "https://github.com/xiaomaomi95/music/raw/refs/heads/main/WANGBUDIAODENI.mp3", filename = "WANGBUDIAODENI.mp3"},
+    {name = "Merry Christmas, Mr. Laurence",    url = "https://github.com/xiaomaomi95/music/raw/refs/heads/main/Christmas.mp3",    filename = "Christmas.mp3"},
+    {name = "示例音乐7",    url = "https://example.com/music7.mp3",    filename = "preset7.mp3"},
+    {name = "示例音乐8",    url = "https://example.com/music8.mp3",    filename = "preset8.mp3"},
+    {name = "示例音乐9",    url = "https://example.com/music9.mp3",    filename = "preset9.mp3"},
+    {name = "示例音乐10",   url = "https://example.com/music10.mp3",   filename = "preset10.mp3"},
+    {name = "示例音乐11",   url = "https://example.com/music11.mp3",   filename = "preset11.mp3"},
+    {name = "示例音乐12",   url = "https://example.com/music12.mp3",   filename = "preset12.mp3"},
+    {name = "示例音乐13",   url = "https://example.com/music13.mp3",   filename = "preset13.mp3"},
+    {name = "示例音乐14",   url = "https://example.com/music14.mp3",   filename = "preset14.mp3"},
+    {name = "示例音乐15",   url = "https://example.com/music15.mp3",   filename = "preset15.mp3"},
+    {name = "示例音乐16",   url = "https://example.com/music16.mp3",   filename = "preset16.mp3"},
+    {name = "示例音乐17",   url = "https://example.com/music17.mp3",   filename = "preset17.mp3"},
+    {name = "示例音乐18",   url = "https://example.com/music18.mp3",   filename = "preset18.mp3"},
+    {name = "示例音乐19",   url = "https://example.com/music19.mp3",   filename = "preset19.mp3"},
+    {name = "示例音乐20",   url = "https://example.com/music20.mp3",   filename = "preset20.mp3"},
+}
+
+local selectedPresetIndex = 1
+local PresetSound = nil
+local presetSoundGui = nil
+
+-- ========== 自动初始化 ID 播放器 ==========
+local function initAudioPlayer()
+    if not AudioPlayerSound then
+        local sg = Instance.new("ScreenGui")
+        sg.Name = "AudioHolder"
+        sg.Parent = LocalPlayer.PlayerGui
+        AudioPlayerSound = Instance.new("Sound")
+        AudioPlayerSound.Parent = sg
+        AudioPlayerSound.SoundId = "rbxassetid://"..DefaultAudioID
+        AudioPlayerSound.Volume = CurrentVolume
+    end
+end
+initAudioPlayer()
+
+-- ========== 初始化预设播放器 ==========
+local function initPresetSound()
+    if not presetSoundGui then
+        presetSoundGui = Instance.new("ScreenGui")
+        presetSoundGui.Name = "PresetAudioGui"
+        presetSoundGui.Parent = LocalPlayer.PlayerGui
+        PresetSound = Instance.new("Sound")
+        PresetSound.Parent = presetSoundGui
+        PresetSound.Volume = CurrentVolume
+        PresetSound.Looped = true
+    end
+end
+
+-- ========== ID 音频播放区域 ==========
+UtilityTab:AddSection({ Name = "ID 音频播放" })
+
+UtilityTab:AddButton({
+    Name = "点击弹出音频ID输入框",
+    Callback = function()
+        if audioInputGui then
+            audioInputGui:Destroy()
+            audioInputGui = nil
+            realTextBox = nil
+            return
+        end
+
+        audioInputGui = Instance.new("ScreenGui")
+        audioInputGui.Name = "AudioIDInputEmbed"
+        audioInputGui.Parent = LocalPlayer.PlayerGui
+        audioInputGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+        local embedFrame = Instance.new("Frame")
+        embedFrame.Size = UDim2.new(0,340,0,40)
+        embedFrame.Position = UDim2.new(0.3,0,0.45,0)
+        embedFrame.BackgroundColor3 = Color3.fromRGB(30,30,30)
+        embedFrame.BorderSizePixel = 2
+        embedFrame.BorderColor3 = Color3.fromRGB(90,90,90)
+        embedFrame.Parent = audioInputGui
+
+        realTextBox = Instance.new("TextBox")
+        realTextBox.Size = UDim2.new(1,-12,1,0)
+        realTextBox.Position = UDim2.new(0,6,0,0)
+        realTextBox.BackgroundTransparency = 1
+        realTextBox.Text = DefaultAudioID
+        realTextBox.TextColor3 = Color3.new(1,1,1)
+        realTextBox.PlaceholderText = "输入音频数字ID"
+        realTextBox.Font = Enum.Font.SourceSans
+        realTextBox.TextSize =16
+        realTextBox.ClearTextOnFocus = false
+        realTextBox.Parent = embedFrame
+        realTextBox:CaptureFocus()
+
+        local function finishInput()
+            local txt = realTextBox.Text
+            if tonumber(txt) then
+                DefaultAudioID = txt
+                if AudioPlayerSound then
+                    AudioPlayerSound.SoundId = "rbxassetid://"..txt
+                end
+                OrionLib:MakeNotification({Name="ID已更新",Content=txt,Time=1.5})
+            else
+                OrionLib:MakeNotification({Name="错误",Content="请输入数字ID",Time=2})
+            end
+            audioInputGui:Destroy()
+            audioInputGui = nil
+            realTextBox = nil
+        end
+
+        realTextBox.FocusLost:Connect(finishInput)
+        realTextBox.ReturnPressedFromOnScreenKeyboard:Connect(finishInput)
+    end
+})
+
+UtilityTab:AddSlider({
+    Name = "音量调节",
+    Min = 0,
+    Max = 5,
+    Default = 1,
+    Increment = 0.1,
+    Callback = function(val)
+        CurrentVolume = val
+        if AudioPlayerSound then
+            AudioPlayerSound.Volume = val
+        end
+        if PresetSound then
+            PresetSound.Volume = val
+        end
+    end
+})
+
+UtilityTab:AddButton({
+    Name = "播放音频 (ID)",
+    Callback = function()
+        if not AudioPlayerSound then
+            initAudioPlayer()
+        end
+        AudioPlayerSound:Play()
+    end
+})
+
+UtilityTab:AddButton({
+    Name = "停止音频 (ID)",
+    Callback = function()
+        if AudioPlayerSound then
+            AudioPlayerSound:Stop()
+        end
+    end
+})
+
+-- ========== 预设音乐播放（弹窗选择，可拖动，尺寸更小） ==========
+UtilityTab:AddSection({ Name = "预设音乐播放" })
+
+-- 动态显示当前选中（默认第一个）
+local selectedLabel = UtilityTab:AddLabel("当前选中：" .. PresetMusicList[1].name)
+
+-- 点击此按钮弹出选择列表
+UtilityTab:AddButton({
+    Name = "📋 选择预设音乐（点击弹窗）",
+    Callback = function()
+        local selectGui = Instance.new("ScreenGui")
+        selectGui.Name = "PresetSelector"
+        selectGui.Parent = LocalPlayer.PlayerGui
+
+        -- 主面板：尺寸调小（宽260，高300）
+        local bg = Instance.new("Frame")
+        bg.Size = UDim2.new(0, 260, 0, 300)
+        bg.Position = UDim2.new(0.5, -130, 0.5, -150)
+        bg.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+        bg.BorderSizePixel = 0
+        bg.Parent = selectGui
+        Instance.new("UICorner", bg).CornerRadius = UDim.new(0, 10)
+
+        -- 标题栏（可拖动）
+        local titleBar = Instance.new("Frame")
+        titleBar.Size = UDim2.new(1, 0, 0, 35)
+        titleBar.BackgroundTransparency = 1
+        titleBar.Parent = bg
+
+        local title = Instance.new("TextLabel")
+        title.Size = UDim2.new(1, 0, 1, 0)
+        title.BackgroundTransparency = 1
+        title.Text = "🎵 选择预设"
+        title.TextColor3 = Color3.new(1,1,1)
+        title.Font = Enum.Font.GothamBold
+        title.TextSize = 16
+        title.Parent = titleBar
+
+        -- 拖动逻辑（类似主窗口）
+        local dragStart, dragPos
+        titleBar.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                dragStart = input.Position
+                dragPos = bg.Position
+            end
+        end)
+        titleBar.InputChanged:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseMovement and dragStart then
+                local delta = input.Position - dragStart
+                bg.Position = UDim2.new(dragPos.X.Scale, dragPos.X.Offset + delta.X,
+                                        dragPos.Y.Scale, dragPos.Y.Offset + delta.Y)
+            end
+        end)
+        titleBar.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                dragStart = nil
+            end
+        end)
+
+        -- 滚动列表（填满除标题栏和底部按钮以外的区域）
+        local listFrame = Instance.new("ScrollingFrame")
+        listFrame.Size = UDim2.new(1, -16, 1, -75)   -- 上下留出空间
+        listFrame.Position = UDim2.new(0, 8, 0, 40)
+        listFrame.BackgroundTransparency = 1
+        listFrame.ScrollBarThickness = 4
+        listFrame.Parent = bg
+
+        local layout = Instance.new("UIListLayout")
+        layout.Padding = UDim.new(0, 4)
+        layout.SortOrder = Enum.SortOrder.LayoutOrder
+        layout.Parent = listFrame
+
+        -- 添加选项按钮
+        for i, preset in ipairs(PresetMusicList) do
+            local btn = Instance.new("TextButton")
+            btn.Size = UDim2.new(1, 0, 0, 30)
+            btn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+            btn.Text = preset.name
+            btn.TextColor3 = Color3.new(1,1,1)
+            btn.Font = Enum.Font.GothamSemibold
+            btn.TextSize = 13
+            btn.Parent = listFrame
+            Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 4)
+
+            btn.MouseButton1Click:Connect(function()
+                selectedPresetIndex = i
+                selectedLabel:Set("当前选中：" .. preset.name)
+                OrionLib:MakeNotification({Name="已选择", Content=preset.name, Time=1.5})
+                selectGui:Destroy()
+            end)
+        end
+
+        -- 自动调整画布大小
+        layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+            listFrame.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 10)
+        end)
+
+        -- 关闭按钮（放在底部）
+        local closeBtn = Instance.new("TextButton")
+        closeBtn.Size = UDim2.new(0, 60, 0, 28)
+        closeBtn.Position = UDim2.new(1, -70, 1, -38)
+        closeBtn.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
+        closeBtn.Text = "关闭"
+        closeBtn.TextColor3 = Color3.new(1,1,1)
+        closeBtn.Font = Enum.Font.GothamBold
+        closeBtn.TextSize = 13
+        closeBtn.Parent = bg
+        Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 5)
+        closeBtn.MouseButton1Click:Connect(function()
+            selectGui:Destroy()
+        end)
+    end
+})
+
+UtilityTab:AddButton({
+    Name = "▶ 播放选中音乐（循环）",
+    Callback = function()
+        local preset = PresetMusicList[selectedPresetIndex]
+        if not preset then
+            OrionLib:MakeNotification({Name="错误", Content="未选择有效预设", Time=2})
+            return
+        end
+
+        local success, err = pcall(function()
+            writefile(preset.filename, game:HttpGet(preset.url))
+        end)
+        if not success then
+            OrionLib:MakeNotification({Name="下载失败", Content=tostring(err), Time=3})
+            return
+        end
+
+        initPresetSound()
+        if not PresetSound then
+            OrionLib:MakeNotification({Name="错误", Content="预设音频组件未初始化", Time=2})
+            return
+        end
+
+        PresetSound:Stop()
+        PresetSound.SoundId = getcustomasset(preset.filename)
+        PresetSound.Volume = CurrentVolume
+        PresetSound.Looped = true
+        PresetSound:Play()
+
+        OrionLib:MakeNotification({Name="播放中", Content=preset.name, Time=2})
+    end
+})
+
+UtilityTab:AddButton({
+    Name = "⏹ 停止预设音乐",
+    Callback = function()
+        if PresetSound then
+            PresetSound:Stop()
+            OrionLib:MakeNotification({Name="已停止", Content="预设音乐已停止", Time=1.5})
+        else
+            OrionLib:MakeNotification({Name="提示", Content="没有正在播放的预设音乐", Time=1.5})
+        end
+    end
+})
