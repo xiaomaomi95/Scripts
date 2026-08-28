@@ -658,7 +658,7 @@ local PresetMusicList = {
     {name = "爱错",   url = "https://github.com/xiaomaomi95/music/raw/refs/heads/main/AICUO.mp3",   filename = "AICUO.mp3"},
     {name = "海屿你",   url = "https://github.com/xiaomaomi95/music/raw/refs/heads/main/HAIYUNI.mp3",   filename = "HAIYUNI.mp3"},
     {name = "无人之岛",   url = "https://github.com/xiaomaomi95/music/raw/refs/heads/main/WURENZHIDAO.mp3",   filename = "WURENZHIDAO.mp3"},
-    {name = "示例音乐19",   url = "https://example.com/music19.mp3",   filename = "preset19.mp3"},
+    {name = "冬眠",   url = "https://github.com/xiaomaomi95/music/raw/refs/heads/main/DONGMIAN.mp3",   filename = "DONGMIAN.mp3"},
     {name = "示例音乐20",   url = "https://example.com/music20.mp3",   filename = "preset20.mp3"},
     {name = "示例音乐10",   url = "https://example.com/music10.mp3",   filename = "preset10.mp3"},
     {name = "示例音乐11",   url = "https://example.com/music11.mp3",   filename = "preset11.mp3"},
