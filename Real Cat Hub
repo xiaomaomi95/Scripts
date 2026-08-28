@@ -8,7 +8,7 @@ local content, isReady = Players:GetUserThumbnailAsync(userId, thumbType, thumbS
 
 StarterGui:SetCore("SendNotification", {
     Title = "猫咪Hub 启动中！",
-    Text = "🤩",
+    Text = "😘",
     Icon = content,
     Duration = 1
 })
@@ -89,15 +89,176 @@ pcall(applyPinkGradientEffect)
 -- ====================================================================
 -- Orion UI Library Load
 -- ====================================================================
--- 前置 UI：选择 UI 颜色主题（带升起动画）
--- ============================================
+-- 前置弹窗：显示更新日志 + 加载/退出选择
+-- ====================================================================
 local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
 local LocalPlayer = Players.LocalPlayer
-local selectedTheme = nil
 
--- 预设主题（顺序：黑色、白色、亮蓝、暖阳橙）
+-- 创建主 GUI
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "MainGUI"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = CoreGui
+
+-- ============================================
+-- 超大全屏遮罩（确保完全覆盖所有屏幕尺寸）
+-- ============================================
+local overlay = Instance.new("Frame")
+overlay.Size = UDim2.new(3, 0, 3, 0)          -- 放大至3倍
+overlay.Position = UDim2.new(-1, 0, -1, 0)    -- 偏移使居中
+overlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+overlay.BackgroundTransparency = 1
+overlay.ZIndex = 1
+overlay.Parent = screenGui
+
+-- ============================================
+-- 弹窗：更新日志 + 加载/退出（带升起动画）
+-- ============================================
+local popupFrame = Instance.new("Frame")
+popupFrame.Size = UDim2.new(0, 420, 0, 340)
+popupFrame.Position = UDim2.new(0.5, -210, 1.2, 0)
+popupFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
+popupFrame.BorderSizePixel = 0
+popupFrame.BackgroundTransparency = 1
+popupFrame.ZIndex = 2
+popupFrame.Parent = screenGui
+Instance.new("UICorner", popupFrame).CornerRadius = UDim.new(0, 12)
+
+-- 边框
+local popupStroke = Instance.new("UIStroke")
+popupStroke.Color = Color3.fromRGB(80, 120, 255)
+popupStroke.Thickness = 2
+popupStroke.Transparency = 0.5
+popupStroke.Parent = popupFrame
+
+-- 标题（加大字号，确保可见）
+local popupTitle = Instance.new("TextLabel")
+popupTitle.Size = UDim2.new(1, 0, 0, 50)
+popupTitle.Position = UDim2.new(0, 0, 0, 8)
+popupTitle.Text = "🐱 猫咪Hub V9"
+popupTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+popupTitle.TextSize = 32
+popupTitle.Font = Enum.Font.GothamBold
+popupTitle.BackgroundTransparency = 1
+popupTitle.ZIndex = 2
+popupTitle.Parent = popupFrame
+
+-- 更新内容
+local updateText = Instance.new("TextLabel")
+updateText.Size = UDim2.new(1, -20, 0, 190)
+updateText.Position = UDim2.new(0, 10, 0, 65)
+updateText.BackgroundColor3 = Color3.fromRGB(20, 20, 35)
+updateText.BorderSizePixel = 0
+updateText.TextColor3 = Color3.fromRGB(220, 220, 240)
+updateText.TextSize = 14
+updateText.Font = Enum.Font.Gotham
+updateText.TextXAlignment = Enum.TextXAlignment.Left
+updateText.TextYAlignment = Enum.TextYAlignment.Top
+updateText.TextWrapped = true
+updateText.Text = [[
+📢 更新日志 (V9):
+
+• 合并了音乐播放hub
+• 集中了视角类功能
+• 优化 UI 动画效果
+• 修复音频播放死亡后无法继续播放的BUG
+• 无
+
+✨ 点击「加载」继续使用脚本
+⚠️ 点击「退出」将关闭脚本
+]]
+updateText.ZIndex = 2
+updateText.Parent = popupFrame
+Instance.new("UICorner", updateText).CornerRadius = UDim.new(0, 6)
+
+-- 按钮
+local btnWidth = 120
+local btnHeight = 40
+local spacing = 20
+local totalWidth = btnWidth * 2 + spacing
+local startX = (420 - totalWidth) / 2
+local startY = 275
+
+local loadBtn = Instance.new("TextButton")
+loadBtn.Size = UDim2.new(0, btnWidth, 0, btnHeight)
+loadBtn.Position = UDim2.new(0, startX, 0, startY)
+loadBtn.Text = "✅ 加载"
+loadBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+loadBtn.TextSize = 18
+loadBtn.Font = Enum.Font.GothamBold
+loadBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 80)
+loadBtn.BorderSizePixel = 0
+loadBtn.ZIndex = 2
+loadBtn.Parent = popupFrame
+Instance.new("UICorner", loadBtn).CornerRadius = UDim.new(0, 8)
+
+local exitBtn = Instance.new("TextButton")
+exitBtn.Size = UDim2.new(0, btnWidth, 0, btnHeight)
+exitBtn.Position = UDim2.new(0, startX + btnWidth + spacing, 0, startY)
+exitBtn.Text = "❌ 退出"
+exitBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+exitBtn.TextSize = 18
+exitBtn.Font = Enum.Font.GothamBold
+exitBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+exitBtn.BorderSizePixel = 0
+exitBtn.ZIndex = 2
+exitBtn.Parent = popupFrame
+Instance.new("UICorner", exitBtn).CornerRadius = UDim.new(0, 8)
+
+-- 按钮悬停效果
+local function setupButtonHover(btn, normalColor, hoverColor)
+    btn.MouseEnter:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = hoverColor}):Play()
+    end)
+    btn.MouseLeave:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = normalColor}):Play()
+    end)
+end
+setupButtonHover(loadBtn, Color3.fromRGB(0, 150, 80), Color3.fromRGB(0, 180, 100))
+setupButtonHover(exitBtn, Color3.fromRGB(200, 50, 50), Color3.fromRGB(230, 70, 70))
+
+-- ============================================
+-- 播放弹窗升起动画
+-- ============================================
+TweenService:Create(overlay, TweenInfo.new(0.5, Enum.EasingStyle.Quad), {
+    BackgroundTransparency = 0.4
+}):Play()
+
+task.wait(0.05)
+TweenService:Create(popupFrame, TweenInfo.new(0.7, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+    Position = UDim2.new(0.5, -210, 0.5, -170),
+    BackgroundTransparency = 0
+}):Play()
+
+-- ============================================
+-- 等待用户选择
+-- ============================================
+local userChoice = nil
+loadBtn.MouseButton1Click:Connect(function() userChoice = "load" end)
+exitBtn.MouseButton1Click:Connect(function() userChoice = "exit" end)
+
+repeat task.wait() until userChoice ~= nil
+
+if userChoice == "exit" then
+    TweenService:Create(popupFrame, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+        Position = UDim2.new(0.5, -210, 1.2, 0),
+        BackgroundTransparency = 1
+    }):Play()
+    TweenService:Create(overlay, TweenInfo.new(0.4), {BackgroundTransparency = 1}):Play()
+    task.wait(0.45)
+    screenGui:Destroy()
+    return
+end
+
+-- 用户选择加载 → 销毁弹窗，保留遮罩
+popupFrame:Destroy()
+
+-- ============================================
+-- 颜色主题选择 UI（带升起动画）
+-- ============================================
+local selectedTheme = nil
 local themes = {
     ["黑色"] = {
         Main = Color3.fromRGB(25, 25, 25),
@@ -118,7 +279,7 @@ local themes = {
     ["蓝色"] = {
         Main = Color3.fromRGB(10, 30, 60),
         Second = Color3.fromRGB(30, 60, 120),
-        Stroke = Color3.fromRGB(0, 150, 255),      -- 亮蓝色
+        Stroke = Color3.fromRGB(0, 150, 255),
         Divider = Color3.fromRGB(50, 80, 150),
         Text = Color3.fromRGB(255, 255, 255),
         TextDark = Color3.fromRGB(180, 210, 255),
@@ -133,68 +294,54 @@ local themes = {
     },
 }
 
--- 创建选择 UI
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "ThemeSelector"
-screenGui.ResetOnSpawn = false
-screenGui.Parent = CoreGui
-
--- 半透明遮罩（淡入）
-local overlay = Instance.new("Frame")
-overlay.Size = UDim2.new(1, 0, 1, 0)
-overlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-overlay.BackgroundTransparency = 1
-overlay.Parent = screenGui
-
--- 主窗口（初始在屏幕底部外，准备升起）
+-- 主窗口（初始在屏幕底部外）
 local mainFrame = Instance.new("Frame")
 mainFrame.Size = UDim2.new(0, 420, 0, 300)
-mainFrame.Position = UDim2.new(0.5, -210, 1.1, 0)  -- 在屏幕下方
+mainFrame.Position = UDim2.new(0.5, -210, 1.2, 0)
 mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
 mainFrame.BorderSizePixel = 0
 mainFrame.BackgroundTransparency = 1
+mainFrame.ZIndex = 2
 mainFrame.Parent = screenGui
 Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 14)
 
--- 边框发光效果
 local stroke = Instance.new("UIStroke")
 stroke.Color = Color3.fromRGB(80, 120, 255)
 stroke.Thickness = 2
 stroke.Transparency = 0.5
 stroke.Parent = mainFrame
 
--- 标题
+-- 标题（加大字号）
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, 0, 0, 55)
 title.Position = UDim2.new(0, 0, 0, 10)
 title.Text = "🎨 选择 UI 主题"
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
-title.TextSize = 26
+title.TextSize = 30
 title.Font = Enum.Font.GothamBold
 title.BackgroundTransparency = 1
+title.ZIndex = 2
 title.Parent = mainFrame
 
--- 副标题
 local subtitle = Instance.new("TextLabel")
 subtitle.Size = UDim2.new(1, 0, 0, 20)
-subtitle.Position = UDim2.new(0, 0, 0, 40)
+subtitle.Position = UDim2.new(0, 0, 0, 45)
 subtitle.Text = "请选择您喜欢的颜色方案"
 subtitle.TextColor3 = Color3.fromRGB(180, 180, 210)
-subtitle.TextSize = 13
+subtitle.TextSize = 14
 subtitle.Font = Enum.Font.Gotham
 subtitle.BackgroundTransparency = 1
 subtitle.TextXAlignment = Enum.TextXAlignment.Center
+subtitle.ZIndex = 2
 subtitle.Parent = mainFrame
 
--- 按钮布局（4个按钮，2列）
 local buttonNames = {"黑色", "白色", "蓝色", "橙色"}
 local btnWidth = 175
 local btnHeight = 50
 local btnSpacing = 12
-local startX = (420 - btnWidth * 2 - btnSpacing) / 2
-local startY = 80
+local startX_btn = (420 - btnWidth * 2 - btnSpacing) / 2
+local startY_btn = 85
 
--- 每个按钮的颜色预览小方块
 local buttonColors = {
     ["黑色"] = Color3.fromRGB(25, 25, 25),
     ["白色"] = Color3.fromRGB(240, 240, 240),
@@ -205,8 +352,8 @@ local buttonColors = {
 for i, name in ipairs(buttonNames) do
     local row = math.floor((i - 1) / 2)
     local col = (i - 1) % 2
-    local x = startX + col * (btnWidth + btnSpacing)
-    local y = startY + row * (btnHeight + btnSpacing)
+    local x = startX_btn + col * (btnWidth + btnSpacing)
+    local y = startY_btn + row * (btnHeight + btnSpacing)
 
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(0, btnWidth, 0, btnHeight)
@@ -217,19 +364,19 @@ for i, name in ipairs(buttonNames) do
     btn.Font = Enum.Font.GothamBold
     btn.BackgroundColor3 = Color3.fromRGB(55, 55, 85)
     btn.BorderSizePixel = 0
+    btn.ZIndex = 2
     btn.Parent = mainFrame
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
 
-    -- 颜色预览小方块（在按钮左侧）
     local preview = Instance.new("Frame")
     preview.Size = UDim2.new(0, 18, 0, 18)
     preview.Position = UDim2.new(0, 12, 0.5, -9)
     preview.BackgroundColor3 = buttonColors[name]
     preview.BorderSizePixel = 0
+    preview.ZIndex = 2
     preview.Parent = btn
     Instance.new("UICorner", preview).CornerRadius = UDim.new(0, 4)
 
-    -- 调整文字位置
     btn.TextXAlignment = Enum.TextXAlignment.Center
 
     btn.MouseEnter:Connect(function()
@@ -241,7 +388,6 @@ for i, name in ipairs(buttonNames) do
 
     btn.MouseButton1Click:Connect(function()
         selectedTheme = name
-        -- 退出动画：向下滑出
         TweenService:Create(mainFrame, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
             Position = UDim2.new(0.5, -210, 1.2, 0),
             BackgroundTransparency = 1
@@ -252,7 +398,6 @@ for i, name in ipairs(buttonNames) do
     end)
 end
 
--- 版本信息
 local versionLabel = Instance.new("TextLabel")
 versionLabel.Size = UDim2.new(1, 0, 0, 20)
 versionLabel.Position = UDim2.new(0, 0, 1, -22)
@@ -261,33 +406,26 @@ versionLabel.Text = "猫咪Hub V6 | 颜色主题选择界面"
 versionLabel.TextColor3 = Color3.fromRGB(120, 120, 160)
 versionLabel.TextSize = 11
 versionLabel.Font = Enum.Font.Gotham
+versionLabel.ZIndex = 2
 versionLabel.Parent = mainFrame
 
--- === 播放升起动画 ===
-
--- 1. 遮罩淡入
-TweenService:Create(overlay, TweenInfo.new(0.5, Enum.EasingStyle.Quad), {
-    BackgroundTransparency = 0.4
-}):Play()
-
--- 2. 主窗口从底部升起 + 淡入（延迟一点）
+-- ============================================
+-- 播放颜色选择界面升起动画
+-- ============================================
 task.wait(0.05)
 TweenService:Create(mainFrame, TweenInfo.new(0.7, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
     Position = UDim2.new(0.5, -210, 0.5, -150),
     BackgroundTransparency = 0
 }):Play()
 
--- 等待用户选择
+-- 等待用户选择主题
 repeat task.wait() until selectedTheme ~= nil
 
 -- ============================================
--- 加载 CatLib
+-- 加载 CatLib 并应用主题
 -- ============================================
 local OrionLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/xiaomaomi95/Scripts/refs/heads/main/CatLib"))()
 
--- ============================================
--- 定义主题刷新函数
--- ============================================
 function OrionLib:RefreshTheme()
     if not self.ThemeObjects then return end
     local theme = self.Themes[self.SelectedTheme]
@@ -316,9 +454,6 @@ function OrionLib:RefreshTheme()
     end
 end
 
--- ============================================
--- 应用选择的主题
--- ============================================
 local chosen = themes[selectedTheme]
 local default = OrionLib.Themes.Default
 
@@ -332,9 +467,6 @@ default.TextDark = chosen.TextDark
 OrionLib.SelectedTheme = "Default"
 OrionLib:RefreshTheme()
 
--- ============================================
--- 暴露 Theme 变量
--- ============================================
 local Theme = {
     BackgroundColor = chosen.Main,
     SliderColor = chosen.Stroke,
@@ -343,9 +475,6 @@ local Theme = {
 }
 _G.Theme = Theme
 
--- ============================================
--- 通知用户
--- ============================================
 game:GetService("StarterGui"):SetCore("SendNotification", {
     Title = "✅ 主题已应用",
     Text = "当前主题：" .. selectedTheme,
@@ -462,7 +591,7 @@ end
 -- Orion UI Creation (Title Changed)
 -- ====================================================================
 local Window = OrionLib:MakeWindow({
-	Name = "🐱猫咪 Hub🐱 V6",
+	Name = "🐱猫咪 Hub🐱 V9",
 	HidePremium = false,
 	SaveConfig = false,
 	IntroEnabled = false,
@@ -482,6 +611,7 @@ local UtilityTab = Window:MakeTab({
 })
 UtilityTab:AddSection({ Name = "玩家信息" })
 UtilityTab:AddLabel("当前玩家：" .. LocalPlayer.Name)
+UtilityTab:AddLabel("当前注入器：Delta")
 UtilityTab:AddLabel("默认FOV: " .. UtilityConfig.FOV .. "")
 UtilityTab:AddSection({ Name = "版本详情" })
 UtilityTab:AddLabel("版本：V6")
@@ -493,6 +623,368 @@ UtilityTab:AddButton({
 		copyToClipboard("https://qm.qq.com/q/dOOrgV2k4o", "QQ Link")
 	end
 })
+-- ====================================================================
+local UtilityTab = Window:MakeTab({
+	Name = "音频功能",
+	Icon = "rbxassetid://4483362458",
+	PremiumOnly = false
+})
+
+-- ========== 全局变量 ==========
+AudioPlayerSound = AudioPlayerSound or nil
+DefaultAudioID = DefaultAudioID or "142376088"
+CurrentVolume = CurrentVolume or 1
+audioInputGui = nil
+realTextBox = nil
+
+-- 预设音乐列表
+local PresetMusicList = {
+    {name = "星河追梦", url = "https://github.com/xiaomaomi95/music/raw/refs/heads/main/WEILONG.mp3", filename = "WEILONG.mp3"},
+    {name = "噬金玫瑰", url = "https://github.com/xiaomaomi95/music/raw/refs/heads/main/HONGLANG.mp3", filename = "HONGLANG.mp3"},
+    {name = "水墨云图", url = "https://github.com/xiaomaomi95/music/raw/refs/heads/main/MAIXIAOWEN.mp3", filename = "MAIXIAOWEN.mp3"},
+    {name = "维什戴尔", url = "https://github.com/xiaomaomi95/music/raw/refs/heads/main/MAIXIAOWENHONGZHANGLANG.mp3", filename = "MAIXIAOWENHONGZHANGLANG.mp3"},
+    {name = "乌鲁鲁狂怒", url = "https://github.com/xiaomaomi95/music/raw/refs/heads/main/WULULU.mp3", filename = "WULULU.mp3"},
+    {name = "忘不掉的你", url = "https://github.com/xiaomaomi95/music/raw/refs/heads/main/WANGBUDIAODENI.mp3", filename = "WANGBUDIAODENI.mp3"},
+    {name = "Merry Christmas, Mr. Laurence", url = "https://github.com/xiaomaomi95/music/raw/refs/heads/main/Christmas.mp3", filename = "Christmas.mp3"},
+    {name = "The fact that you left", url = "https://github.com/xiaomaomi95/music/raw/refs/heads/main/THEFACTTHATYOULEFT.mp3", filename = "THEFACTTHATYOULEFT.mp3"},
+    {name = "A Thousand Years", url = "https://github.com/xiaomaomi95/music/raw/refs/heads/main/ATHOUSANDYEARS.mp3", filename = "ATHOUSANDYEARS.mp3"},
+    {name = "Time machine", url = "https://github.com/xiaomaomi95/music/raw/refs/heads/main/TIMEMACHINE.mp3", filename = "TIMEMACHINE.mp3"},
+    {name = "17",   url = "https://github.com/xiaomaomi95/music/raw/refs/heads/main/17.mp3",   filename = "17.mp3"},
+    {name = "不说",   url = "https://github.com/xiaomaomi95/music/raw/refs/heads/main/BUSHUO.mp3",   filename = "BUSHUO.mp3"},
+    {name = "浴室",   url = "https://github.com/xiaomaomi95/music/raw/refs/heads/main/YS.mp3",   filename = "YS.mp3"},
+    {name = "我们俩DJ",   url = "https://github.com/xiaomaomi95/music/raw/refs/heads/main/WOMENLIANGDJ.mp3",   filename = "WOMENLIANGDJ.mp3"},
+    {name = "This is what winter feels like",   url = "https://github.com/xiaomaomi95/music/raw/refs/heads/main/THISISWHATWINTERFEELSLIKE.mp3",   filename = "THISISWHATWINTERFEELSLIKE.mp3"},
+    {name = "Memories",   url = "https://github.com/xiaomaomi95/music/raw/refs/heads/main/MEMORIES.mp3",   filename = "MEMORIES.mp3"},
+    {name = "爱错",   url = "https://github.com/xiaomaomi95/music/raw/refs/heads/main/AICUO.mp3",   filename = "AICUO.mp3"},
+    {name = "示例音乐17",   url = "https://example.com/music17.mp3",   filename = "preset17.mp3"},
+    {name = "示例音乐18",   url = "https://example.com/music18.mp3",   filename = "preset18.mp3"},
+    {name = "示例音乐19",   url = "https://example.com/music19.mp3",   filename = "preset19.mp3"},
+    {name = "示例音乐20",   url = "https://example.com/music20.mp3",   filename = "preset20.mp3"},
+{name = "示例音乐10",   url = "https://example.com/music10.mp3",   filename = "preset10.mp3"},
+    {name = "示例音乐11",   url = "https://example.com/music11.mp3",   filename = "preset11.mp3"},
+    {name = "示例音乐12",   url = "https://example.com/music12.mp3",   filename = "preset12.mp3"},
+    {name = "示例音乐13",   url = "https://example.com/music13.mp3",   filename = "preset13.mp3"},
+    {name = "示例音乐14",   url = "https://example.com/music14.mp3",   filename = "preset14.mp3"},
+    {name = "示例音乐15",   url = "https://example.com/music15.mp3",   filename = "preset15.mp3"},
+    {name = "示例音乐16",   url = "https://example.com/music16.mp3",   filename = "preset16.mp3"},
+    {name = "示例音乐17",   url = "https://example.com/music17.mp3",   filename = "preset17.mp3"},
+    {name = "示例音乐18",   url = "https://example.com/music18.mp3",   filename = "preset18.mp3"},
+    {name = "示例音乐19",   url = "https://example.com/music19.mp3",   filename = "preset19.mp3"},
+    {name = "示例音乐20",   url = "https://example.com/music20.mp3",   filename = "preset20.mp3"}
+}
+
+local selectedPresetIndex = 1
+local PresetSound = nil
+local manualStop = false          -- 是否手动停止（为true时不再自动恢复）
+
+-- ========== 初始化 ID 播放器【挂载ReplicatedStorage，脱离PlayerGui，死亡不销毁】 ==========
+local function initAudioPlayer()
+    if not AudioPlayerSound then
+        local audioFolder
+        if not game.ReplicatedStorage:FindFirstChild("AudioHolder") then
+            audioFolder = Instance.new("Folder")
+            audioFolder.Name = "AudioHolder"
+            audioFolder.Parent = game.ReplicatedStorage
+        else
+            audioFolder = game.ReplicatedStorage.AudioHolder
+        end
+        AudioPlayerSound = Instance.new("Sound")
+        AudioPlayerSound.Parent = audioFolder
+        AudioPlayerSound.SoundId = "rbxassetid://"..DefaultAudioID
+        AudioPlayerSound.Volume = CurrentVolume
+    end
+end
+initAudioPlayer()
+
+-- ========== 核心：启动预设音乐 ==========
+local function startPresetMusic(forceRedownload)
+    local preset = PresetMusicList[selectedPresetIndex]
+    if not preset then
+        OrionLib:MakeNotification({Name="错误", Content="未选择有效音频", Time=2})
+        return false
+    end
+
+    -- 下载文件（如果不存在或强制重下）
+    if forceRedownload or not isfile(preset.filename) then
+        local success, err = pcall(function()
+            writefile(preset.filename, game:HttpGet(preset.url))
+        end)
+        if not success then
+            OrionLib:MakeNotification({Name="下载失败", Content=tostring(err), Time=3})
+            return false
+        end
+    end
+
+    -- 如果已有 PresetSound，先销毁重建（避免残留状态）
+    if PresetSound then
+        pcall(function()
+            PresetSound:Stop()
+            PresetSound:Destroy()
+        end)
+        PresetSound = nil
+    end
+
+    -- 音频实例放在ReplicatedStorage，角色死亡完全不受影响
+    local audioFolder
+    if not game.ReplicatedStorage:FindFirstChild("PresetAudioHolder") then
+        audioFolder = Instance.new("Folder")
+        audioFolder.Name = "PresetAudioHolder"
+        audioFolder.Parent = game.ReplicatedStorage
+    else
+        audioFolder = game.ReplicatedStorage.PresetAudioHolder
+    end
+
+    -- 创建新的 Sound
+    PresetSound = Instance.new("Sound")
+    PresetSound.Parent = audioFolder
+    PresetSound.Volume = CurrentVolume
+    PresetSound.Looped = true
+    PresetSound.SoundId = getcustomasset(preset.filename)
+
+    -- 播放
+    pcall(function() PresetSound:Play() end)
+    OrionLib:MakeNotification({Name="播放中", Content=preset.name, Time=2})
+    return true
+end
+
+-- ========== ID 音频区域 ==========
+UtilityTab:AddSection({ Name = "ID 音频播放" })
+
+UtilityTab:AddButton({
+    Name = "点击弹出音频ID输入框",
+    Callback = function()
+        if audioInputGui then
+            pcall(function()
+                audioInputGui:Destroy()
+            end)
+            audioInputGui = nil
+            realTextBox = nil
+            return
+        end
+
+        audioInputGui = Instance.new("ScreenGui")
+        audioInputGui.Name = "AudioIDInputEmbed"
+        audioInputGui.Parent = LocalPlayer.PlayerGui
+        audioInputGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+        local embedFrame = Instance.new("Frame")
+        embedFrame.Size = UDim2.new(0,340,0,40)
+        embedFrame.Position = UDim2.new(0.3,0,0.45,0)
+        embedFrame.BackgroundColor3 = Color3.fromRGB(30,30,30)
+        embedFrame.BorderSizePixel = 2
+        embedFrame.BorderColor3 = Color3.fromRGB(90,90,90)
+        embedFrame.Parent = audioInputGui
+
+        realTextBox = Instance.new("TextBox")
+        realTextBox.Size = UDim2.new(1,-12,1,0)
+        realTextBox.Position = UDim2.new(0,6,0,0)
+        realTextBox.BackgroundTransparency = 1
+        realTextBox.Text = DefaultAudioID
+        realTextBox.TextColor3 = Color3.new(1,1,1)
+        realTextBox.PlaceholderText = "输入音频数字ID"
+        realTextBox.Font = Enum.Font.SourceSans
+        realTextBox.TextSize =16
+        realTextBox.ClearTextOnFocus = false
+        realTextBox.Parent = embedFrame
+        task.wait()
+        pcall(function() realTextBox:CaptureFocus() end)
+
+        local function finishInput()
+            local txt = realTextBox.Text
+            if tonumber(txt) then
+                DefaultAudioID = txt
+                if AudioPlayerSound then
+                    AudioPlayerSound.SoundId = "rbxassetid://"..txt
+                end
+                OrionLib:MakeNotification({Name="ID已更新",Content=txt,Time=1.5})
+            else
+                OrionLib:MakeNotification({Name="错误",Content="请输入数字ID",Time=2})
+            end
+            pcall(function() audioInputGui:Destroy() end)
+            audioInputGui = nil
+            realTextBox = nil
+        end
+
+        realTextBox.FocusLost:Connect(finishInput)
+        realTextBox.ReturnPressedFromOnScreenKeyboard:Connect(finishInput)
+    end
+})
+
+UtilityTab:AddSlider({
+    Name = "音量调节",
+    Min = 0,
+    Max = 5,
+    Default = 1,
+    Increment = 0.1,
+    Callback = function(val)
+        CurrentVolume = val
+        pcall(function()
+            if AudioPlayerSound then
+                AudioPlayerSound.Volume = val
+            end
+            if PresetSound then
+                PresetSound.Volume = val
+            end
+        end)
+    end
+})
+
+UtilityTab:AddButton({
+    Name = "播放音频 (ID)",
+    Callback = function()
+        if not AudioPlayerSound then
+            initAudioPlayer()
+        end
+        pcall(function() AudioPlayerSound:Play() end)
+    end
+})
+
+UtilityTab:AddButton({
+    Name = "停止音频 (ID)",
+    Callback = function()
+        pcall(function()
+            if AudioPlayerSound then
+                AudioPlayerSound:Stop()
+            end
+        end)
+    end
+})
+
+-- ========== 预设音乐播放 ==========
+UtilityTab:AddSection({ Name = "外部音乐播放" })
+
+local selectedLabel = UtilityTab:AddLabel("当前选中：" .. PresetMusicList[1].name)
+
+-- 选择弹窗
+UtilityTab:AddButton({
+    Name = "📋 选择外部音乐（点击弹窗）",
+    Callback = function()
+        local selectGui = Instance.new("ScreenGui")
+        selectGui.Name = "PresetSelector"
+        selectGui.Parent = LocalPlayer.PlayerGui
+
+        local bg = Instance.new("Frame")
+        bg.Size = UDim2.new(0, 260, 0, 300)
+        bg.Position = UDim2.new(0.5, -130, 0.5, -150)
+        bg.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+        bg.BorderSizePixel = 0
+        bg.Parent = selectGui
+        Instance.new("UICorner", bg).CornerRadius = UDim.new(0, 10)
+
+        local titleBar = Instance.new("Frame")
+        titleBar.Size = UDim2.new(1, 0, 0, 35)
+        titleBar.BackgroundTransparency = 1
+        titleBar.Parent = bg
+
+        local title = Instance.new("TextLabel")
+        title.Size = UDim2.new(1, 0, 1, 0)
+        title.BackgroundTransparency = 1
+        title.Text = "🎵 选择音乐"
+        title.TextColor3 = Color3.new(1,1,1)
+        title.Font = Enum.Font.GothamBold
+        title.TextSize = 16
+        title.Parent = titleBar
+
+        local dragStart, dragPos
+        titleBar.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                dragStart = input.Position
+                dragPos = bg.Position
+            end
+        end)
+        titleBar.InputChanged:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseMovement and dragStart then
+                local delta = input.Position - dragStart
+                bg.Position = UDim2.new(dragPos.X.Scale, dragPos.X.Offset + delta.X,
+                                        dragPos.Y.Scale, dragPos.Y.Offset + delta.Y)
+            end
+        end)
+        titleBar.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                dragStart = nil
+            end
+        end)
+
+        local listFrame = Instance.new("ScrollingFrame")
+        listFrame.Size = UDim2.new(1, -16, 1, -75)
+        listFrame.Position = UDim2.new(0, 8, 0, 40)
+        listFrame.BackgroundTransparency = 1
+        listFrame.ScrollBarThickness = 4
+        listFrame.Parent = bg
+
+        local layout = Instance.new("UIListLayout")
+        layout.Padding = UDim.new(0, 4)
+        layout.SortOrder = Enum.SortOrder.LayoutOrder
+        layout.Parent = listFrame
+
+        for i, preset in ipairs(PresetMusicList) do
+            local btn = Instance.new("TextButton")
+            btn.Size = UDim2.new(1, 0, 0, 30)
+            btn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+            btn.Text = preset.name
+            btn.TextColor3 = Color3.new(1,1,1)
+            btn.Font = Enum.Font.GothamSemibold
+            btn.TextSize = 13
+            btn.Parent = listFrame
+            Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 4)
+
+            btn.MouseButton1Click:Connect(function()
+                selectedPresetIndex = i
+                selectedLabel:Set("当前选中：" .. preset.name)
+                OrionLib:MakeNotification({Name="已选择", Content=preset.name, Time=1.5})
+                pcall(function() selectGui:Destroy() end)
+            end)
+        end
+
+        layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+            listFrame.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 10)
+        end)
+
+        local closeBtn = Instance.new("TextButton")
+        closeBtn.Size = UDim2.new(0, 60, 0, 28)
+        closeBtn.Position = UDim2.new(1, -70, 1, -38)
+        closeBtn.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
+        closeBtn.Text = "关闭"
+        closeBtn.TextColor3 = Color3.new(1,1,1)
+        closeBtn.Font = Enum.Font.GothamBold
+        closeBtn.TextSize = 13
+        closeBtn.Parent = bg
+        Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 5)
+        closeBtn.MouseButton1Click:Connect(function()
+            pcall(function() selectGui:Destroy() end)
+        end)
+    end
+})
+
+-- 播放按钮
+UtilityTab:AddButton({
+    Name = "▶ 播放选中音乐（循环）",
+    Callback = function()
+        manualStop = false
+        startPresetMusic(false)
+    end
+})
+
+-- 停止按钮
+UtilityTab:AddButton({
+    Name = "⏹ 停止外部音乐",
+    Callback = function()
+        pcall(function()
+            if PresetSound then
+                manualStop = true
+                PresetSound:Stop()
+                PresetSound:Destroy()
+                PresetSound = nil
+                OrionLib:MakeNotification({Name="已停止", Content="外部音乐已停止", Time=1.5})
+            else
+                OrionLib:MakeNotification({Name="提示", Content="没有正在播放的外部音乐", Time=1.5})
+            end
+        end)
+    end
+})
+
+-- ✅【完全删除原来CharacterAdded重生自动恢复音频代码！】
+-- 音频放在ReplicatedStorage，玩家死亡、重生，声音会**不间断继续播放**，不会停止
 local UtilityTab = Window:MakeTab({
 	Name = "玩家功能",
 	Icon = "rbxassetid://4483362458",
@@ -3205,387 +3697,6 @@ UtilityTab:AddToggle({
 
             table.clear(Data.playerCache)
             table.clear(Data.allConnections)
-        end
-    end
-})
--- ====================================================================
-local UtilityTab = Window:MakeTab({
-	Name = "音频功能",
-	Icon = "rbxassetid://4483362458",
-	PremiumOnly = false
-})
-UtilityTab:AddButton({
-    Name = "音频播放器",
-    Callback = function()
-    -- 音频播放器 By 小猫猫
-local UserInputService = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
-local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
-
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "AudioPlayerUI"
-ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-ScreenGui.Parent = PlayerGui
-
-local MainFrame = Instance.new("Frame")
-MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 320, 0, 260)
-MainFrame.Position = UDim2.new(0.3,0,0.3,0)
-MainFrame.BackgroundColor3 = Color3.new(0.15,0.15,0.15)
-MainFrame.BorderSizePixel = 2
-MainFrame.BorderColor3 = Color3.new(0.4,0.4,0.4)
-MainFrame.Active = true
-MainFrame.Draggable = false
-MainFrame.Parent = ScreenGui
-
--- 标题栏
-local TitleBar = Instance.new("Frame")
-TitleBar.Size = UDim2.new(1,0,0,30)
-TitleBar.BackgroundColor3 = Color3.new(0.28,0.28,0.28)
-TitleBar.ZIndex = 10
-TitleBar.Active = true
-TitleBar.Parent = MainFrame
-
-local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(1,0,1,0)
-Title.BackgroundTransparency = 1
-Title.Text = "音频播放器"
-Title.TextColor3 = Color3.new(1,1,1)
-Title.Font = Enum.Font.SourceSansBold
-Title.TextSize = 18
-Title.TextXAlignment = Enum.TextXAlignment.Center
-Title.Parent = TitleBar
-
-local MinBtn = Instance.new("TextButton")
-MinBtn.Size = UDim2.new(0,32,0,24)
-MinBtn.Position = UDim2.new(1,-68,0,3)
-MinBtn.BackgroundColor3 = Color3.new(0.18,0.45,0.7)
-MinBtn.Text = "−"
-MinBtn.TextColor3 = Color3.new(1,1,1)
-MinBtn.Font = Enum.Font.SourceSansBold
-MinBtn.TextSize =20
-MinBtn.ZIndex =20
-MinBtn.Parent = TitleBar
-
-local CloseBtn = Instance.new("TextButton")
-CloseBtn.Size = UDim2.new(0,32,0,24)
-CloseBtn.Position = UDim2.new(1,-34,0,3)
-CloseBtn.BackgroundColor3 = Color3.new(0.7,0.2,0.2)
-CloseBtn.Text = "×"
-CloseBtn.TextColor3 = Color3.new(1,1,1)
-CloseBtn.Font = Enum.Font.SourceSansBold
-CloseBtn.TextSize =20
-CloseBtn.ZIndex =20
-CloseBtn.Parent = TitleBar
-
--- 内容容器：所有功能控件全部放这里
-local Content = Instance.new("Frame")
-Content.Size = UDim2.new(1, 0, 1, -30)
-Content.Position = UDim2.new(0,0,0,30)
-Content.BackgroundTransparency = 1
-Content.Parent = MainFrame
-
--- 窗口拖动
-local dragData = {
-    dragging = false,
-    offX = 0,
-    offY = 0
-}
-
-TitleBar.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragData.dragging = true
-        local m = UserInputService:GetMouseLocation()
-        dragData.offX = m.X - MainFrame.AbsolutePosition.X
-        dragData.offY = m.Y - MainFrame.AbsolutePosition.Y
-    end
-end)
-
-RunService.RenderStepped:Connect(function()
-    if dragData.dragging then
-        local m = UserInputService:GetMouseLocation()
-        MainFrame.Position = UDim2.new(0, m.X - dragData.offX, 0, m.Y - dragData.offY)
-    end
-end)
-
-UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragData.dragging = false
-    end
-end)
-
--- 最小化逻辑
-local miniState = false
-local normalSize = UDim2.new(0,320,0,260)
-local miniSize = UDim2.new(0,320,0,30)
-
-MinBtn.MouseButton1Click:Connect(function()
-    miniState = not miniState
-    if miniState then
-        MainFrame.Size = miniSize
-        Content.Visible = false
-    else
-        MainFrame.Size = normalSize
-        Content.Visible = true
-    end
-end)
-
-CloseBtn.MouseButton1Click:Connect(function()
-    ScreenGui:Destroy()
-end)
-
--- 全部控件父级为Content
-local AudioIdBox = Instance.new("TextBox")
-AudioIdBox.Size = UDim2.new(0.9,0,0,35)
-AudioIdBox.Position = UDim2.new(0.05,0,0,10)
-AudioIdBox.BackgroundColor3 = Color3.new(0.25,0.25,0.25)
-AudioIdBox.TextColor3 = Color3.new(1,1,1)
-AudioIdBox.PlaceholderText = "输入音频ID"
-AudioIdBox.Text = "142376088"
-AudioIdBox.Font = Enum.Font.SourceSans
-AudioIdBox.TextSize =16
-AudioIdBox.Parent = Content
-
-local PlayBtn = Instance.new("TextButton")
-PlayBtn.Size = UDim2.new(0.42,0,0,40)
-PlayBtn.Position = UDim2.new(0.05,0,0,55)
-PlayBtn.BackgroundColor3 = Color3.new(0.2,0.6,0.2)
-PlayBtn.Text = "播放"
-PlayBtn.TextColor3 = Color3.new(1,1,1)
-PlayBtn.Font = Enum.Font.SourceSansBold
-PlayBtn.TextSize =17
-PlayBtn.Parent = Content
-
-local StopBtn = Instance.new("TextButton")
-StopBtn.Size = UDim2.new(0.42,0,0,40)
-StopBtn.Position = UDim2.new(0.53,0,0,55)
-StopBtn.BackgroundColor3 = Color3.new(0.7,0.2,0.2)
-StopBtn.Text = "停止播放"
-StopBtn.TextColor3 = Color3.new(1,1,1)
-StopBtn.Font = Enum.Font.SourceSansBold
-StopBtn.TextSize =17
-StopBtn.Parent = Content
-
-local VolLabel = Instance.new("TextLabel")
-VolLabel.Size = UDim2.new(0.9,0,0,25)
-VolLabel.Position = UDim2.new(0.05,0,0,105)
-VolLabel.BackgroundTransparency =1
-VolLabel.Text = string.format("音量：%.2f",1)
-VolLabel.TextColor3 = Color3.new(1,1,1)
-VolLabel.Font = Enum.Font.SourceSans
-VolLabel.TextSize =15
-VolLabel.Parent = Content
-
-local SliderBg = Instance.new("Frame")
-SliderBg.Size = UDim2.new(0.9,0,0,22)
-SliderBg.Position = UDim2.new(0.05,0,0,135)
-SliderBg.BackgroundColor3 = Color3.new(0.3,0.3,0.3)
-SliderBg.Active = true
-SliderBg.Parent = Content
-
-local SliderKnob = Instance.new("Frame")
-SliderKnob.Size = UDim2.new(0,22,1,0)
-SliderKnob.Position = UDim2.new(0,0,0,0)
-SliderKnob.BackgroundColor3 = Color3.new(0.1,0.7,0.9)
-SliderKnob.ZIndex = 15
-SliderKnob.Active = true
-SliderKnob.Parent = SliderBg
-
-local soundObj = Instance.new("Sound")
-soundObj.Parent = ScreenGui
-soundObj.Volume = 1
-soundObj.SoundId = "rbxassetid://142376088"
-
-local volMin = 1
-local volMax =5
-local currentVol = 1
-
-local function updateSliderFromVolume(vol)
-	local ratio = (vol - volMin)/(volMax - volMin)
-	ratio = math.clamp(ratio,0,1)
-	SliderKnob.Position = UDim2.new(ratio, -11,0,0)
-	VolLabel.Text = string.format("音量：%.2f",vol)
-	soundObj.Volume = vol
-end
-updateSliderFromVolume(currentVol)
-
--- 音量滑块
-local sliderDragging = false
-SliderKnob.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-		sliderDragging = true
-	end
-end)
-
-SliderBg.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-		local mouseLoc = UserInputService:GetMouseLocation()
-		local absPos = SliderBg.AbsolutePosition.X
-		local width = SliderBg.AbsoluteSize.X
-		local offset = math.clamp(mouseLoc.X - absPos,0,width)
-		local ratio = offset / width
-		currentVol = volMin + ratio*(volMax - volMin)
-		updateSliderFromVolume(currentVol)
-		sliderDragging = true
-	end
-end)
-
-RunService.RenderStepped:Connect(function()
-	if sliderDragging then
-		local mouseLoc = UserInputService:GetMouseLocation()
-		local absPos = SliderBg.AbsolutePosition.X
-		local width = SliderBg.AbsoluteSize.X
-		local offset = math.clamp(mouseLoc.X - absPos,0,width)
-		local ratio = offset / width
-		currentVol = volMin + ratio*(volMax - volMin)
-		updateSliderFromVolume(currentVol)
-	end
-end)
-
-UserInputService.InputEnded:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-		sliderDragging = false
-	end
-end)
-
-PlayBtn.MouseButton1Click:Connect(function()
-	local rawId = AudioIdBox.Text or ""
-	local numId = tonumber(rawId)
-	if numId then
-		soundObj.SoundId = "rbxassetid://"..tostring(numId)
-	end
-	soundObj:Play()
-end)
-
-StopBtn.MouseButton1Click:Connect(function()
-	soundObj:Stop()
-end)
-generate()
-OrionLib:MakeNotification({Name="提示", Content="音频播放器脚本加载成功！", Time=3})
-    end
-})
-local UserInputService = game:GetService("UserInputService")
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
-
---音频全局变量
-local AudioPlayerSound = nil
-local DefaultAudioID = "142376088"
-local CurrentVolume = 1
-local audioInputGui = nil
-local realTextBox = nil
-
---1 仅标题
-UtilityTab:AddSection({ Name = "音频播放功能" })
-UtilityTab:AddButton({
-    Name = "初始化音频组件",
-    Callback = function()
-        local sg = Instance.new("ScreenGui")
-        sg.Name = "AudioHolder"
-        sg.Parent = LocalPlayer.PlayerGui
-        AudioPlayerSound = Instance.new("Sound")
-        AudioPlayerSound.Parent = sg
-        AudioPlayerSound.SoundId = "rbxassetid://"..DefaultAudioID
-        AudioPlayerSound.Volume = CurrentVolume
-        OrionLib:MakeNotification({Name="提示",Content="音频初始化完毕",Time=2})
-    end
-})
-
---2 输入音频ID
-UtilityTab:AddButton({
-    Name = "点击弹出音频ID输入框",
-    Callback = function()
-        -- 如果已经存在输入框，直接销毁，切换显示隐藏
-        if audioInputGui then
-            audioInputGui:Destroy()
-            audioInputGui = nil
-            realTextBox = nil
-            return
-        end
-
-        -- 创建悬浮输入框
-        audioInputGui = Instance.new("ScreenGui")
-        audioInputGui.Name = "AudioIDInputEmbed"
-        audioInputGui.Parent = LocalPlayer.PlayerGui
-        audioInputGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-
-        local embedFrame = Instance.new("Frame")
-        embedFrame.Size = UDim2.new(0,340,0,40)
-        embedFrame.Position = UDim2.new(0.3,0,0.45,0)
-        embedFrame.BackgroundColor3 = Color3.fromRGB(30,30,30)
-        embedFrame.BorderSizePixel = 2
-        embedFrame.BorderColor3 = Color3.fromRGB(90,90,90)
-        embedFrame.Parent = audioInputGui
-
-        realTextBox = Instance.new("TextBox")
-        realTextBox.Size = UDim2.new(1,-12,1,0)
-        realTextBox.Position = UDim2.new(0,6,0,0)
-        realTextBox.BackgroundTransparency = 1
-        realTextBox.Text = DefaultAudioID
-        realTextBox.TextColor3 = Color3.new(1,1,1)
-        realTextBox.PlaceholderText = "输入音频数字ID"
-        realTextBox.Font = Enum.Font.SourceSans
-        realTextBox.TextSize =16
-        realTextBox.ClearTextOnFocus = false
-        realTextBox.Parent = embedFrame
-        realTextBox:CaptureFocus()
-
-        -- 输入完成（回车/失去焦点）自动保存并隐藏输入框
-        local function finishInput()
-            local txt = realTextBox.Text
-            if tonumber(txt) then
-                DefaultAudioID = txt
-                if AudioPlayerSound then
-                    AudioPlayerSound.SoundId = "rbxassetid://"..txt
-                end
-                OrionLib:MakeNotification({Name="ID已更新",Content=txt,Time=1.5})
-            else
-                OrionLib:MakeNotification({Name="错误",Content="请输入数字ID",Time=2})
-            end
-            --输入完毕自动销毁隐藏
-            audioInputGui:Destroy()
-            audioInputGui = nil
-            realTextBox = nil
-        end
-
-        realTextBox.FocusLost:Connect(finishInput)
-        realTextBox.ReturnPressedFromOnScreenKeyboard:Connect(finishInput)
-    end
-})
-
---3音量滑块
-UtilityTab:AddSlider({
-    Name = "音量调节",
-    Min = 0,
-    Max = 5,
-    Default = 1,
-    Increment = 0.1,
-    Callback = function(val)
-        CurrentVolume = val
-        if AudioPlayerSound then
-            AudioPlayerSound.Volume = val
-        end
-    end
-})
-
---4播放停止
-UtilityTab:AddButton({
-    Name = "播放音频",
-    Callback = function()
-        if not AudioPlayerSound then
-            OrionLib:MakeNotification({Name="提示",Content="先点初始化音频组件",Time=2})
-            return
-        end
-        AudioPlayerSound:Play()
-    end
-})
-UtilityTab:AddButton({
-    Name = "停止音频",
-    Callback = function()
-        if AudioPlayerSound then
-            AudioPlayerSound:Stop()
         end
     end
 })
@@ -10734,7 +10845,7 @@ OrionLib:MakeNotification({
 	Name = "🐱猫咪 Hub🐱 V6 已启动",
 	Content = "欢迎使用！",
 	Image = "rbxassetid://4483362458",
-	Time = 5
+	Time = 3
 })
 print("==========================================")
 print("🐱猫咪 Hub🐱 V6")
@@ -10747,5 +10858,5 @@ StarterGui:SetCore("SendNotification", {
     Title = "🐱🐱🐱🐱🐱🐱🐱",
     Text = "喵喵喵喵喵喵喵喵喵喵喵喵",
     Icon = content,
-    Duration = 10
+    Duration = 1
 })
