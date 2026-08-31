@@ -614,7 +614,7 @@ UtilityTab:AddLabel("当前玩家：" .. LocalPlayer.Name)
 UtilityTab:AddLabel("当前注入器：Delta")
 UtilityTab:AddLabel("默认FOV: " .. UtilityConfig.FOV .. "")
 UtilityTab:AddSection({ Name = "版本详情" })
-UtilityTab:AddLabel("版本：V6")
+UtilityTab:AddLabel("版本：V9")
 UtilityTab:AddLabel("免费脚本，禁止倒卖！")
 UtilityTab:AddSection({ Name = "群聊链接" })
 UtilityTab:AddButton({
